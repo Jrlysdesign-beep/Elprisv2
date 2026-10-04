@@ -1,0 +1,1 @@
+Upload alle filer og mapper til roden af dit eksisterende Elpris repository. Kør derefter Actions > Update electricity prices > Run workflow én gang.
