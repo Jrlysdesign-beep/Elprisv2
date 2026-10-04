@@ -1,0 +1,68 @@
+name: Update electricity prices
+
+'on':
+  workflow_dispatch:
+  schedule:
+    - cron: '7 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download and create prices.json
+        shell: python
+        run: |
+          import json
+          import urllib.parse
+          import urllib.request
+
+          params = {
+              "filter": json.dumps({"PriceArea": ["DK2"]}, separators=(",", ":")),
+              "sort": "TimeUTC DESC",
+              "limit": "300"
+          }
+          url = "https://api.energidataservice.dk/dataset/DayAheadPrices?" + urllib.parse.urlencode(params)
+
+          req = urllib.request.Request(url, headers={"User-Agent": "Elpris-V5"})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              data = json.load(response)
+
+          buckets = {}
+          for row in data.get("records", []):
+              t = row.get("TimeDK") or row.get("HourDK") or row.get("TimeUTC") or row.get("HourUTC")
+              p = row.get("DayAheadPriceDKK")
+              if p is None:
+                  p = row.get("SpotPriceDKK")
+              if p is None:
+                  p = row.get("PriceDKK")
+              if not t or p is None:
+                  continue
+
+              hour = t[:13] + ":00:00"
+              buckets.setdefault(hour, []).append(float(p) / 1000.0)
+
+          hours = [
+              {"time": hour, "price": sum(values) / len(values)}
+              for hour, values in sorted(buckets.items())
+          ]
+
+          with open("prices.json", "w", encoding="utf-8") as f:
+              json.dump({"area": "DK2", "hours": hours}, f, ensure_ascii=False, indent=2)
+
+      - name: Commit prices
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          if git diff --cached --quiet; then
+            echo "No price changes"
+          else
+            git commit -m "Update electricity prices"
+            git push
+          fi
