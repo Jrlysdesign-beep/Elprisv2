@@ -5,11 +5,11 @@ select{width:100%;margin-top:10px;padding:13px 14px;border:0;border-radius:12px;
 .chargeitem,.bestcharge{background:#0f172a;border-radius:14px;padding:12px}
 .bestcharge{margin-top:12px}.bigcost{font-size:34px;font-weight:900;margin-top:5px}.footer{text-align:center;opacity:.55;font-size:13px;padding:24px 8px 10px}@media(max-width:650px){.grid{grid-template-columns:1fr}.hours{height:255px;gap:3px;padding-bottom:32px;overflow-x:hidden}.h{flex:1 1 0;min-width:0}.hprice{font-size:10px}.htime{font-size:9px}.price{font-size:52px}}
 .h.selected{
-  outline:3px solid #fff;
+  outline:1.5px solid #fff;
   outline-offset:2px;
   filter:brightness(1.28);
   z-index:5;
-  box-shadow:0 0 0 2px rgba(0,0,0,.25),0 0 16px rgba(255,255,255,.55);
+  box-shadow:0 0 0 1px rgba(0,0,0,.25),0 0 8px rgba(255,255,255,.55);
 }
 </style></head>
 <body><div id="pullrefresh" style="position:fixed;top:-58px;left:50%;transform:translateX(-50%);z-index:9999;background:#1d2b3d;color:white;padding:10px 18px;border-radius:0 0 16px 16px;font:700 14px system-ui;transition:top .18s ease;box-shadow:0 4px 14px rgba(0,0,0,.25)">↓ Træk ned for at opdatere</div><div class="w"><header><div><div class="t">⚡ Elpris</div><div class="muted">DK2 · Sjælland</div></div><b id="clock"></b></header><div id="hero" class="hero"><b id="status">HENTER PRISDATA</b><div id="price" class="price">–</div><div>kr./kWh · inkl. Andel-tillæg, Radius, Energinet, elafgift og moms</div><div id="breakdown" class="muted" style="margin-top:8px"></div><div id="advice" class="advice">Et øjeblik…</div></div><div id="err"></div>
