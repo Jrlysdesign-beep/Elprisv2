@@ -4,7 +4,7 @@ select{width:100%;margin-top:10px;padding:13px 14px;border:0;border-radius:12px;
 .chargegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
 .chargeitem,.bestcharge{background:#0f172a;border-radius:14px;padding:12px}
 .bestcharge{margin-top:12px}.bigcost{font-size:34px;font-weight:900;margin-top:5px}.footer{text-align:center;opacity:.55;font-size:13px;padding:24px 8px 10px}@media(max-width:650px){.grid{grid-template-columns:1fr}.hours{height:255px;gap:3px;padding-bottom:32px;overflow-x:hidden}.h{flex:1 1 0;min-width:0}.hprice{font-size:10px}.htime{font-size:9px}.price{font-size:52px}}</style></head>
-<body><div class="w"><header><div><div class="t">⚡ Elpris</div><div class="muted">DK2 · Sjælland</div></div><b id="clock"></b></header><div id="hero" class="hero"><b id="status">HENTER PRISDATA</b><div id="price" class="price">–</div><div>kr./kWh · inkl. Radius, Energinet, elafgift og moms</div><div id="breakdown" class="muted" style="margin-top:8px"></div><div id="advice" class="advice">Et øjeblik…</div></div><div id="err"></div>
+<body><div class="w"><header><div><div class="t">⚡ Elpris</div><div class="muted">DK2 · Sjælland</div></div><b id="clock"></b></header><div id="hero" class="hero"><b id="status">HENTER PRISDATA</b><div id="price" class="price">–</div><div>kr./kWh · inkl. Andel-tillæg, Radius, Energinet, elafgift og moms</div><div id="breakdown" class="muted" style="margin-top:8px"></div><div id="advice" class="advice">Et øjeblik…</div></div><div id="err"></div>
 <div class="grid"><div class="card"><div class="label">Billigste time</div><div id="cheap" class="val">–</div></div><div class="card"><div class="label">Vask / opvask</div><div id="wash" class="val">–</div></div><div class="card"><div class="label">Elbil · billigste 4 timer</div><div id="car" class="val">–</div></div></div>
 <div class="card"><div class="label">🚗 Hvad koster opladningen?</div>
 <select id="carselect"><option value="buzz">VW ID. Buzz 2025 · 86 kWh</option><option value="e2008">Peugeot e-2008 2023 · 46,3 kWh brugbar</option><option value="q4">Audi Q4 e-tron 45 2023 · 77 kWh</option><option value="e5008">Peugeot E-5008 2026 · 73 kWh</option></select>
@@ -16,7 +16,7 @@ select{width:100%;margin-top:10px;padding:13px 14px;border:0;border-radius:12px;
 const $=x=>document.getElementById(x),fmt=x=>Number(x).toLocaleString("da-DK",{minimumFractionDigits:2,maximumFractionDigits:2}),hh=x=>new Date(x).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"}),col=x=>x<1?"green":x<2?"yellow":"red";
 function tick(){$("clock").textContent=new Date().toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"})}tick();setInterval(tick,10000);
 function radiusTariff(t){let m=t.getMonth()+1,h=t.getHours(),winter=(m>=10||m<=3);if(!winter){if(h<6)return .1327;if(h<17)return .1991;if(h<21)return .5176;return .1991}if(h<6)return .1327;if(h<17)return .3982;if(h<21)return 1.1945;return .3982}
-function totalPrice(spot,t){const vat=1.25,energinet=.115,elafgift=.008;return spot*vat+radiusTariff(t)+(energinet+elafgift)*vat}
+function totalPrice(spot,t){const vat=1.25,energinet=.115,elafgift=.008,andelTillaeg=.1463;return spot*vat+radiusTariff(t)+(energinet+elafgift)*vat+andelTillaeg}
 
 const cars={buzz:{kwh:86},e2008:{kwh:46.3},q4:{kwh:77},e5008:{kwh:73}};let priceHours=[];
 function priceAt(t){let x=priceHours.find(h=>t>=h.t&&t<new Date(h.t.getTime()+3600000));return x?x.p:null}
