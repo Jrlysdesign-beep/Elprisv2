@@ -1,4 +1,4 @@
-<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0f172a"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Elpris"><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icon-192.png"><title>Elpris V14.2</title>
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0f172a"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Elpris"><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icon-192.png"><title>Elpris V14.3</title>
 <style>*{box-sizing:border-box}body{margin:0;background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.w{max-width:900px;margin:auto;padding:18px}header{display:flex;justify-content:space-between}.t{font-size:32px;font-weight:900}.muted{opacity:.65}.hero,.card{background:#1e293b;border-radius:22px;padding:20px;margin-top:14px}.hero{text-align:center;padding:28px}.green{background:#15803d}.yellow{background:#ca8a04}.red{background:#b91c1c}.price{font-size:64px;font-weight:900}.advice{font-size:23px;font-weight:800}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.label{opacity:.65}.val{font-size:20px;font-weight:800;margin-top:7px}.hours{display:flex;align-items:flex-end;gap:5px;height:285px;padding:30px 2px 34px;overflow-x:auto}.h{flex:1 1 0;min-width:0;position:relative;border-radius:9px 9px 3px 3px;text-align:center;font-weight:800;min-height:18px}.hprice{position:absolute;bottom:9px;left:50%;transform:translateX(-50%) rotate(-90deg);transform-origin:center;font-size:12px;white-space:nowrap;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}.htime{position:absolute;bottom:-23px;left:50%;transform:translateX(-50%);font-size:11px;line-height:1;white-space:nowrap;color:#cbd5e1}.err{background:#7f1d1d;padding:12px;border-radius:12px;margin-top:12px}
 select{width:100%;margin-top:10px;padding:13px 14px;border:0;border-radius:12px;background:#0f172a;color:#fff;font-size:17px;font-weight:700}
 .chargegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
@@ -36,9 +36,9 @@ select{width:100%;margin-top:10px;padding:13px 14px;border:0;border-radius:12px;
 #chartscroll .hours{position:relative;padding-bottom:60px}
 @media(max-width:650px){#chartscroll .hours{padding-bottom:60px}}
 #chartscroll .day-overlay{position:absolute;inset:0;pointer-events:none;z-index:10}
-#chartscroll .day-title{position:absolute;bottom:5px;transform:translateX(-50%);font-size:12px;font-weight:750;white-space:nowrap;color:#e2e8f0}
-#chartscroll .day-divider{position:absolute;top:6px;bottom:0;width:2px;background:#fb7185;opacity:.85;transform:translateX(-1px)}
-#chartscroll .day-divider::after{content:"";position:absolute;top:0;left:-2px;width:6px;height:6px;border-radius:50%;background:#fb7185}
+#chartscroll .day-title{position:absolute;bottom:17px;transform:translateX(-50%);font-size:12px;font-weight:750;white-space:nowrap;color:#e2e8f0}
+#chartscroll .day-divider{position:absolute;top:6px;bottom:0;width:1px;background:#fb7185;opacity:.85;transform:translateX(-0.5px)}
+#chartscroll .day-divider::after{content:"";position:absolute;top:0;left:-2px;width:5px;height:5px;border-radius:50%;background:#fb7185}
 </style></head>
 <body><div id="pullrefresh" style="position:fixed;top:-58px;left:50%;transform:translateX(-50%);z-index:9999;background:#1d2b3d;color:white;padding:10px 18px;border-radius:0 0 16px 16px;font:700 14px system-ui;transition:top .18s ease;box-shadow:0 4px 14px rgba(0,0,0,.25)">↓ Træk ned for at opdatere</div><div class="w"><header><div><div class="t">⚡ Elpris</div><div class="muted">DK2 · Sjælland</div></div><b id="clock"></b></header><div id="hero" class="hero"><b id="status">HENTER PRISDATA</b><div id="price" class="price">–</div><div>kr./kWh · inkl. elselskabstillæg, Radius, Energinet, elafgift og moms</div><div id="breakdown" class="muted" style="margin-top:8px"></div><div id="advice" class="advice">Et øjeblik…</div></div><div id="err"></div>
 <div class="grid"><div class="card"><div class="label">Billigste time</div><div id="cheap" class="val">–</div></div><div class="card"><div class="label">Vask / opvask</div><div id="wash" class="val">–</div></div><div class="card"><div class="label">Elbil · billigste 4 timer</div><div id="car" class="val">–</div></div></div>
@@ -105,7 +105,7 @@ function renderDayLabels(){
   else days.get(key).right=x+w;
  }
  for(const day of days.values()){
-  if(day.firstHour===0){const line=document.createElement("span");line.className="day-divider";line.style.left=day.left+"px";overlay.appendChild(line)}
+  if(day.firstHour===0){const firstBar=bars.find(b=>b.offsetLeft===day.left);const previousBar=firstBar?bars[bars.indexOf(firstBar)-1]:null;const boundary=previousBar?(previousBar.offsetLeft+previousBar.offsetWidth+day.left)/2:day.left;const line=document.createElement("span");line.className="day-divider";line.style.left=boundary+"px";overlay.appendChild(line)}
   const label=document.createElement("span");label.className="day-title";
   label.textContent=day.date.toLocaleDateString("da-DK",{weekday:"long",day:"numeric"});
   label.style.left=((day.left+day.right)/2)+"px";
