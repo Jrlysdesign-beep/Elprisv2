@@ -102,7 +102,7 @@ $("enableZaptec").addEventListener("change",e=>setZaptecEnabled(e.target.checked
 $("settingsOpen").addEventListener("click",()=>{$("appSettings").hidden=false;$("settingsClose").focus()});
 $("settingsClose").addEventListener("click",()=>{$("appSettings").hidden=true;$("settingsOpen").focus()});
 $("appSettings").addEventListener("click",e=>{if(e.target===$("appSettings"))$("appSettings").hidden=true});
-$("openInstallFromSettings").addEventListener("click",()=>{$("appSettings").hidden=true;$("installHelp").hidden=false});
+$("openInstallFromSettings").addEventListener("click",()=>{$("appSettings").hidden=true;$("installHelp").hidden=false;document.body.style.overflow="hidden";$("helpClose").focus()});
 setZaptecEnabled((()=>{try{return localStorage.getItem("elprisZaptecEnabled")==="1"}catch(e){return false}})());
 function tick(){$("clock").textContent=new Date().toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"})}tick();setInterval(tick,10000);
 function radiusTariff(t){let m=t.getMonth()+1,h=t.getHours(),winter=(m>=10||m<=3);if(!winter){if(h<6)return .1327;if(h<17)return .1991;if(h<21)return .5176;return .1991}if(h<6)return .1327;if(h<17)return .3982;if(h<21)return 1.1945;return .3982}
@@ -247,9 +247,9 @@ if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js");
 
 // Hjælp til installation på hjemmeskærmen
 (()=>{
-const overlay=document.getElementById("installHelp"),opener=document.getElementById("helpOpen"),closer=document.getElementById("helpClose"),dialog=overlay.querySelector(".help-dialog");
+const overlay=document.getElementById("installHelp"),opener=document.getElementById("settingsOpen"),closer=document.getElementById("helpClose"),dialog=overlay.querySelector(".help-dialog");
 function closeHelp(){overlay.hidden=true;document.body.style.overflow="";opener.focus()}
-opener.addEventListener("click",()=>{overlay.hidden=false;document.body.style.overflow="hidden";closer.focus()});
+
 closer.addEventListener("click",closeHelp);
 overlay.addEventListener("click",e=>{if(e.target===overlay)closeHelp()});
 document.addEventListener("keydown",e=>{if(overlay.hidden)return;if(e.key==="Escape")closeHelp();if(e.key==="Tab"){const els=[closer];if(!e.shiftKey&&document.activeElement===els[els.length-1]){e.preventDefault();els[0].focus()}else if(e.shiftKey&&document.activeElement===els[0]){e.preventDefault();els[els.length-1].focus()}}});
