@@ -123,7 +123,8 @@ test("late scheduler fires once within 15 minutes but never after start",()=>{
  const due=Date.parse("2026-10-27T11:00:00Z");
  assert.equal(dueAlarms([alarm()],hours,due+14*60000+59000).length,1);
  assert.equal(dueAlarms([alarm()],hours,due+15*60000).length,0);
- assert.equal(dueAlarms([alarm({notice_hours:0})],hours,Date.parse("2026-10-27T14:00:00Z")).length,1);\n assert.equal(dueAlarms([alarm({notice_hours:0})],hours,Date.parse("2026-10-27T14:15:00Z")).length,0);
+ assert.equal(dueAlarms([alarm({notice_hours:0})],hours,Date.parse("2026-10-27T14:00:00Z")).length,1);
+ assert.equal(dueAlarms([alarm({notice_hours:0})],hours,Date.parse("2026-10-27T14:15:00Z")).length,0);
 });
 test("same complete price period keeps identical delivery key across feed refresh",()=>{
  const original=validateFeed(feed([
