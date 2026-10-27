@@ -104,3 +104,16 @@ test("one alarm and one interval share a stable deduplication key across reruns"
  assert.equal(uniqueCandidates(dueAlarms([alarm()],hours,now),keys).length,0);
  assert.equal(uniqueCandidates(dueAlarms([alarm({id:"other-alarm"})],hours,now),keys).length,1);
 });
+
+test("288 quarter-hour records over three days are accepted",()=>{
+ const start=Date.parse("2026-10-26T00:00:00Z");
+ const clock=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Copenhagen",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
+ const offset=(ms)=>{const p=Object.fromEntries(clock.formatToParts(new Date(ms)).filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));const local=`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;const naive=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute,+p.second);const m=Math.round((naive-ms)/60000),sign=m>=0?"+":"-",abs=Math.abs(m);return local+sign+String(Math.floor(abs/60)).padStart(2,"0")+":"+String(abs%60).padStart(2,"0");};
+ const hours=Array.from({length:288},(_,i)=>({time:offset(start+i*900000),price:0.4}));
+ assert.equal(validateFeed({area:"DK2",hours},"DK2").length,288);
+ assert.equal(cheapPeriods(validateFeed({area:"DK2",hours},"DK2"),0.5).length,1);
+});
+test("oversized price feed is rejected",()=>{
+ const time="2026-10-27T15:00:00+01:00";
+ assert.throws(()=>validateFeed({area:"DK2",hours:Array.from({length:1001},()=>({time,price:0.4}))},"DK2"),/Invalid area or hours/);
+});
