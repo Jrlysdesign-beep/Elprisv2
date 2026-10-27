@@ -1,4 +1,4 @@
-import {fetchTestFeed} from "../src/test-price-feed.js";
+import {fetchTestFeeds} from "../src/test-price-feed.js";
 import {validateFeed,dueAlarms,uniqueCandidates} from "../src/price-engine.js";
 
 const PRICE_URL="https://api.energidataservice.dk/dataset/Elspotprices";
@@ -23,12 +23,16 @@ check("alarmAndDuplicate",()=>{
  if(due.length!==1||uniqueCandidates(due,new Set(["dry-run-DK2|"+due[0].startTime])).length!==0)throw Error("Alarm/dedup failure");
  return {status:"passed",candidates:due.length,afterDuplicateFilter:0};
 });
-for(const area of ["DK1","DK2"]){
- try{
-  const feed=await fetchTestFeed(area,now);
+try{
+ const feeds=await fetchTestFeeds(now);
+ for(const area of ["DK1","DK2"]){
+  const feed=feeds[area];
   const hours=validateFeed(feed,area);
   summary.tests["liveFeed"+area]={status:"valid",hours:hours.length,priceType:feed.priceType,firstHour:feed.hours[0]?.time,lastHour:feed.hours.at(-1)?.time,candidates:dueAlarms(alarms.map(a=>({...a,id:"dry-run-"+area})),hours,now).length};
- }catch(e){summary.tests["liveFeed"+area]={status:"blocked",reason:e.message};}
+ }
+}catch(e){
+ for(const area of ["DK1","DK2"])summary.tests["liveFeed"+area]={status:"blocked",reason:e.message};
 }
+
 console.log(JSON.stringify(summary,null,2));
 if(Object.values(summary.tests).some(x=>x.status==="rejected"||x.status==="blocked")||summary.tests.alarmAndDuplicate?.status!=="passed"||["DK1","DK2"].some(area=>summary.tests["liveFeed"+area]?.status!=="valid"))process.exitCode=1;
