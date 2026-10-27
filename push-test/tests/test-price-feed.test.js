@@ -46,7 +46,7 @@ test("provider 429 blocks both regions safely",async()=>{
 });
 test("missing DK2 in combined response is rejected",async()=>{
  const fetcher=async()=>({ok:true,json:async()=>({records:[record("2026-07-10T09:00:00","DK1",250)]})});
- await assert.rejects(fetchTestFeeds(Date.parse("2026-07-10T08:00:00Z"),fetcher),/Invalid area or hours/);
+ await assert.rejects(fetchTestFeeds(Date.parse("2026-07-10T08:00:00Z"),fetcher),/No future prices for DK2/);
 });
 
 test("historical-only feed is rejected",()=>{
