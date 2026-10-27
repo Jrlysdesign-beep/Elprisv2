@@ -29,6 +29,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       DB_NAME: elpris-push-isolated-test-db
       DB_ID: 2811e53d-ee9d-45d2-94dc-d8ffed33d447
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.ISOLATED_D1_BACKUP_ENCRYPTION_KEY }}
     steps:
       - name: Check out isolated test branch
         uses: actions/checkout@v4
@@ -41,6 +42,8 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$BACKUP_ENCRYPTION_KEY"
+          test "${#BACKUP_ENCRYPTION_KEY}" -ge 32
           node - <<'NODE'
           const fs=require('node:fs');
           const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
@@ -58,23 +61,36 @@ jobs:
       - name: Install Wrangler (no deployment)
         run: npm install --ignore-scripts
 
-      - name: Export remote isolated D1 backup before any write
+      - name: Export and encrypt isolated D1 backup before any write
         shell: bash
         run: |
           set -euo pipefail
+          umask 077
           mkdir -p backup
-          npx wrangler d1 export "$DB_NAME" --remote --config wrangler.jsonc --output backup/isolated-d1-before-migration.sql
-          test -s backup/isolated-d1-before-migration.sql
-          grep -q 'CREATE TABLE' backup/isolated-d1-before-migration.sql
-          sha256sum backup/isolated-d1-before-migration.sql > backup/SHA256SUMS
-          echo "Isolated database backup created and validated."
+          npx wrangler d1 export "$DB_NAME" --remote --config wrangler.jsonc --output backup/plain.sql
+          test -s backup/plain.sql
+          grep -q 'CREATE TABLE' backup/plain.sql
+          # Encrypt BEFORE upload. Only ciphertext and its checksum become artifacts.
+          openssl enc -aes-256-cbc -pbkdf2 -iter 250000 -salt \
+            -in backup/plain.sql -out backup/isolated-d1-backup.sql.enc \
+            -pass env:BACKUP_ENCRYPTION_KEY
+          test -s backup/isolated-d1-backup.sql.enc
+          # Verify decryption without writing or logging plaintext.
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
+            -in backup/isolated-d1-backup.sql.enc \
+            -pass env:BACKUP_ENCRYPTION_KEY | cmp -s backup/plain.sql -
+          sha256sum backup/isolated-d1-backup.sql.enc > backup/SHA256SUMS
+          rm -f backup/plain.sql
+          echo "Encrypted isolated D1 backup validated. No plaintext artifact uploaded."
 
-      - name: Upload backup artifact (must succeed before migrations)
+      - name: Upload encrypted backup artifact (must succeed before migrations)
         uses: actions/upload-artifact@v4
         with:
-          name: isolated-d1-backup-${{ github.run_id }}
-          path: push-test/backup/
-          retention-days: 30
+          name: isolated-d1-encrypted-backup-${{ github.run_id }}
+          path: |
+            push-test/backup/isolated-d1-backup.sql.enc
+            push-test/backup/SHA256SUMS
+          retention-days: 7
           if-no-files-found: error
 
       - name: Apply migration 001 to isolated D1 only
