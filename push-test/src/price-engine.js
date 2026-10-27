@@ -13,14 +13,34 @@ export function validateFeed(data,area){
   return {startMs:utc,startTime:new Date(utc).toISOString(),price:p.price};
  }).sort((a,b)=>a.startMs-b.startMs);
 }
+// A cheap period consists of consecutive 15-minute slots. A gap or a price
+// at/above the threshold ends the period. Keys use the first UTC instant.
+export function cheapPeriods(hours,threshold){
+ if(!Number.isFinite(threshold))throw Error("Invalid threshold");
+ const ordered=[...hours].sort((a,b)=>a.startMs-b.startMs);
+ const periods=[];let current=null;
+ for(const h of ordered){
+  if(!Number.isFinite(h.startMs)||!Number.isFinite(h.price))throw Error("Invalid interval");
+  if(h.price>=threshold){current=null;continue;}
+  if(current&&h.startMs===current.endMs){
+   current.endMs=h.startMs+900000;current.slots++;current.lowestPrice=Math.min(current.lowestPrice,h.price);
+  }else{
+   current={startMs:h.startMs,startTime:new Date(h.startMs).toISOString(),endMs:h.startMs+900000,slots:1,lowestPrice:h.price};
+   periods.push(current);
+  }
+ }
+ return periods;
+}
 export function dueAlarms(alarms,hours,nowMs){
  if(!Number.isFinite(nowMs))throw Error("Invalid clock");
  const result=[];
- for(const alarm of alarms)for(const hour of hours){
+ for(const alarm of alarms){
   if(!alarm.enabled||!Number.isInteger(alarm.notice_hours)||alarm.notice_hours<0||alarm.notice_hours>24||!Number.isFinite(alarm.threshold))continue;
-  const due=hour.startMs-alarm.notice_hours*3600000;
-  if(hour.price<alarm.threshold && nowMs>=due && nowMs<due+60000 && hour.startMs>nowMs)
-   result.push({alarmId:alarm.id,startTime:hour.startTime,price:hour.price});
+  for(const period of cheapPeriods(hours,alarm.threshold)){
+   const due=period.startMs-alarm.notice_hours*3600000;
+   if(nowMs>=due&&nowMs<due+60000&&period.startMs>nowMs)
+    result.push({alarmId:alarm.id,startTime:period.startTime,price:period.lowestPrice,slots:period.slots,endTime:new Date(period.endMs).toISOString()});
+  }
  }
  return result;
 }
