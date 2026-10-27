@@ -1,3 +1,4 @@
+import testClient from "./test-client.js";
 import webpush from "web-push";
 const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json",...headers}});
 const cors=(req,env)=>({"access-control-allow-origin":env.ALLOWED_ORIGIN,"access-control-allow-methods":"GET,POST,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","vary":"Origin"});
@@ -5,6 +6,10 @@ const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-25
 const token=req=>req.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{32,})$/)?.[1];
 async function api(req,env){
  const url=new URL(req.url),h=cors(req,env);
+ if(req.method==="GET"&&url.pathname==="/push-test")return new Response(`<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#102030"><link rel="manifest" href="/push-manifest.webmanifest"><title>Elpris Push Test</title><style>body{font:17px system-ui;background:#102030;color:white;max-width:540px;margin:30px auto;padding:20px}button{display:block;width:100%;padding:16px;margin:15px 0;border:0;border-radius:12px;font-size:17px}#status{white-space:pre-wrap}</style></head><body><h1>Elpris – Push test</h1><p>Separat test. Tilføj siden til hjemmeskærmen i Safari, åbn den derfra, og tillad notifikationer.</p><button id="enable">Aktivér notifikationer</button><button id="test">Send testbesked</button><p id="status">Klar til test</p><script type="module" src="/push-test-client.js"></script></body></html>`,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+ if(req.method==="GET"&&url.pathname==="/push-manifest.webmanifest")return json({name:"Elpris Push Test",short_name:"Push test",start_url:"/push-test",scope:"/",display:"standalone",background_color:"#102030",theme_color:"#102030"});
+ if(req.method==="GET"&&url.pathname==="/push-sw.js")return new Response(`self.addEventListener("push",event=>{let data={};try{data=event.data?.json()||{}}catch{}event.waitUntil(self.registration.showNotification(data.title||"Elpris test",{body:data.body||"Testbesked",data:{url:"/push-test"}}))});self.addEventListener("notificationclick",event=>{event.notification.close();event.waitUntil(clients.openWindow("/push-test"))});`,{headers:{"content-type":"text/javascript","cache-control":"no-store","service-worker-allowed":"/"}});
+ if(req.method==="GET"&&url.pathname==="/push-test-client.js")return new Response(testClient,{headers:{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store"}});
  if(req.method==="GET"&&url.pathname==="/health")return json({ok:true,service:"elpris-push-isolated-test",pushConfigured:!!(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT)},200,{"cache-control":"no-store"});
  if(req.headers.get("origin")!==env.ALLOWED_ORIGIN)return json({error:"Origin not allowed"},403,h);
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:h});
@@ -19,6 +24,14 @@ async function api(req,env){
  const t=token(req);if(!t)return json({error:"Authorization required"},401,h);
  const sub=await env.DB.prepare("SELECT id FROM subscriptions WHERE token_hash=?").bind(await hash(t)).first();
  if(!sub)return json({error:"Unknown subscription"},401,h);
+ if(req.method==="POST"&&url.pathname==="/api/test-push"){
+  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)return json({error:"Push not configured"},503,h);
+  const record=await env.DB.prepare("SELECT subscription_json FROM subscriptions WHERE id=?").bind(sub.id).first();
+  if(!record)return json({error:"Subscription missing"},404,h);
+  webpush.setVapidDetails(env.VAPID_SUBJECT,env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
+  try{await webpush.sendNotification(JSON.parse(record.subscription_json),JSON.stringify({title:"Elpris test",body:"Din iPhone kan modtage pushbeskeder."}));return json({ok:true},200,h)}
+  catch(e){console.error("Test push failed",e.statusCode||"unknown");return json({error:"Push delivery failed"},502,h)}
+ }
  if(req.method==="POST"&&url.pathname==="/api/alarms"){
   const b=await req.json();if(!["DK1","DK2"].includes(b.area)||!Number.isFinite(b.threshold)||b.threshold<0||b.threshold>50||!Number.isInteger(b.noticeHours)||b.noticeHours<0||b.noticeHours>24)return json({error:"Invalid alarm"},400,h);
   const id=crypto.randomUUID();await env.DB.prepare("INSERT INTO alarms(id,subscription_id,area,threshold,notice_hours) VALUES(?,?,?,?,?)").bind(id,sub.id,b.area,b.threshold,b.noticeHours).run();return json({id},201,h);
