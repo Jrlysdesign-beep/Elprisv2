@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {validateFeed,dueAlarms,uniqueCandidates} from "../src/price-engine.js";
+import {validateFeed,dueAlarms,uniqueCandidates,cheapPeriods} from "../src/price-engine.js";
 const feed=(hours)=>({area:"DK2",hours});
 test("rejects production feed without explicit offset",()=>{
  assert.throws(()=>validateFeed(feed([{time:"2026-10-27T09:00:00",price:0.2}]),"DK2"));
@@ -29,23 +29,45 @@ test("fires at lead time only, strictly below threshold, without duplicates",()=
 
 const alarm=(overrides={})=>({id:"quarter-alarm",enabled:1,threshold:0.5,notice_hours:3,...overrides});
 const quarter=(time,price)=>({time,price});
-test("four quarter-hour intervals produce distinct candidates, never the same delivery twice",()=>{
+test("four consecutive cheap quarters yield one alarm period",()=>{
  const hours=validateFeed(feed([
   quarter("2026-10-27T15:00:00+01:00",0.40),
   quarter("2026-10-27T15:15:00+01:00",0.41),
   quarter("2026-10-27T15:30:00+01:00",0.42),
   quarter("2026-10-27T15:45:00+01:00",0.43)
  ]),"DK2");
- const delivered=new Set();
- for(let i=0;i<4;i++){
-  const now=Date.parse("2026-10-27T11:00:30Z")+i*900000;
-  const candidates=dueAlarms([alarm()],hours,now);
-  assert.equal(candidates.length,1);
-  assert.equal(uniqueCandidates(candidates,delivered).length,1);
-  delivered.add(candidates[0].alarmId+"|"+candidates[0].startTime);
-  assert.equal(uniqueCandidates(candidates,delivered).length,0);
- }
- assert.equal(delivered.size,4);
+ const periods=cheapPeriods(hours,0.5);
+ assert.equal(periods.length,1);assert.equal(periods[0].slots,4);
+ const first=dueAlarms([alarm()],hours,Date.parse("2026-10-27T11:00:30Z"));
+ assert.equal(first.length,1);assert.equal(first[0].slots,4);
+ const delivered=new Set([first[0].alarmId+"|"+first[0].startTime]);
+ assert.equal(uniqueCandidates(first,delivered).length,0);
+ for(let i=1;i<4;i++)
+  assert.equal(dueAlarms([alarm()],hours,Date.parse("2026-10-27T11:00:30Z")+i*900000).length,0);
+});
+test("threshold boundary separates two cheap periods",()=>{
+ const hours=validateFeed(feed([
+  quarter("2026-10-27T15:00:00+01:00",0.4),
+  quarter("2026-10-27T15:15:00+01:00",0.5),
+  quarter("2026-10-27T15:30:00+01:00",0.3)
+ ]),"DK2");
+ const periods=cheapPeriods(hours,0.5);
+ assert.equal(periods.length,2);
+ assert.equal(periods[0].slots,1);assert.equal(periods[1].slots,1);
+});
+test("missing quarter separates periods rather than inventing prices",()=>{
+ const hours=validateFeed(feed([
+  quarter("2026-10-27T15:00:00+01:00",0.4),
+  quarter("2026-10-27T15:30:00+01:00",0.3)
+ ]),"DK2");
+ assert.equal(cheapPeriods(hours,0.5).length,2);
+});
+test("fall DST continuous UTC quarters remain one period",()=>{
+ const hours=validateFeed(feed([
+  quarter("2026-10-25T02:45:00+02:00",0.4),
+  quarter("2026-10-25T02:00:00+01:00",0.4)
+ ]),"DK2");
+ assert.equal(cheapPeriods(hours,0.5).length,1);
 });
 test("exact due window boundaries and late execution fail closed",()=>{
  const hours=validateFeed(feed([quarter("2026-10-27T15:15:00+01:00",0.4)]),"DK2");
