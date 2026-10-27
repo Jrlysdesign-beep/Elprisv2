@@ -68,13 +68,19 @@ async function scheduled(env){
  const candidates=dueAlarms(alarms.results,hours,now);
  for(const candidate of candidates){
   const alarm=alarms.results.find(a=>a.id===candidate.alarmId);
-  const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time) VALUES(?,?)").bind(alarm.id,candidate.startTime).run();
+  const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time,status,attempted_at) VALUES(?,?,'reserved',?)").bind(alarm.id,candidate.startTime,Date.now()).run();
   if(!reserved.meta.changes)continue;
   try{
-   await webpush.sendNotification(JSON.parse(alarm.subscription_json),JSON.stringify({title:"Elpris-alarm",body:`Strømpris ${candidate.price.toFixed(2)} kr/kWh kl. ${new Date(candidate.startTime).toLocaleTimeString("da-DK",{timeZone:"Europe/Copenhagen",hour:"2-digit",minute:"2-digit"})}`,url:"/push-test"}));
+   const response=await webpush.sendNotification(JSON.parse(alarm.subscription_json),JSON.stringify({title:"Elpris-alarm",body:`Strømpris ${candidate.price.toFixed(2)} kr/kWh kl. ${new Date(candidate.startTime).toLocaleTimeString("da-DK",{timeZone:"Europe/Copenhagen",hour:"2-digit",minute:"2-digit"})}`,url:"/push-test"}));
+   await env.DB.prepare("UPDATE deliveries SET status='accepted',completed_at=?,http_status=? WHERE alarm_id=? AND start_time=? AND status='reserved'").bind(Date.now(),response.statusCode||201,alarm.id,candidate.startTime).run();
   }catch(e){
-   // Keep delivery reservation on uncertain network errors to avoid duplicate notifications.
-   console.error("Push delivery failed",e.statusCode||"unknown");
+   // An uncertain error may already have delivered. Never retry automatically.
+   const code=Number.isInteger(e.statusCode)?e.statusCode:null;
+   const state=code&&code>=400&&code<500&&code!==408&&code!==429?"failed":"uncertain";
+   try{
+    await env.DB.prepare("UPDATE deliveries SET status=?,completed_at=?,http_status=? WHERE alarm_id=? AND start_time=? AND status='reserved'").bind(state,Date.now(),code,alarm.id,candidate.startTime).run();
+   }catch(dbError){console.error("Delivery status update failed",dbError.message);}
+   console.error("Push delivery",state,code||"unknown");
   }
  }
  }
