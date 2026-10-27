@@ -1,4 +1,5 @@
 import {fetchTestFeed} from "./test-price-feed.js";
+import {classifyPushOutcome} from "./delivery-status.js";
 import {validateFeed,dueAlarms} from "./price-engine.js";
 import testClient from "./test-client.js";
 import webpush from "web-push";
@@ -75,8 +76,7 @@ async function scheduled(env){
    await env.DB.prepare("UPDATE deliveries SET status='accepted',completed_at=?,http_status=? WHERE alarm_id=? AND start_time=? AND status='reserved'").bind(Date.now(),response.statusCode||201,alarm.id,candidate.startTime).run();
   }catch(e){
    // An uncertain error may already have delivered. Never retry automatically.
-   const code=Number.isInteger(e.statusCode)?e.statusCode:null;
-   const state=code&&code>=400&&code<500&&code!==408&&code!==429?"failed":"uncertain";
+   const {status:state,httpStatus:code}=classifyPushOutcome(e);
    try{
     await env.DB.prepare("UPDATE deliveries SET status=?,completed_at=?,http_status=? WHERE alarm_id=? AND start_time=? AND status='reserved'").bind(state,Date.now(),code,alarm.id,candidate.startTime).run();
    }catch(dbError){console.error("Delivery status update failed",dbError.message);}
