@@ -15,7 +15,8 @@
   "vars": {
     "ALLOWED_ORIGIN": "https://jrlysdesign-beep.github.io",
     "PRICE_URL": "https://jrlysdesign-beep.github.io/Elprisv2/prices.json",
-    "ENABLE_AUTOMATIC_PRICE_PUSH": "true"
+    "ENABLE_AUTOMATIC_PRICE_PUSH": "true",
+    "PUSH_UI_TEST_ORIGIN": "https://elprisv2-ui-isolated-test.pages.dev"
   },
   "triggers": {
     "crons": [
