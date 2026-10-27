@@ -1,3 +1,4 @@
+import {validateFeed,dueAlarms} from "./price-engine.js";
 import testClient from "./test-client.js";
 import webpush from "web-push";
 const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json",...headers}});
@@ -49,19 +50,23 @@ async function scheduled(env){
  if(!env.VAPID_SUBJECT||!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY)throw Error("Push keys not configured");
  const response=await fetch(env.PRICE_URL,{headers:{"accept":"application/json"}});if(!response.ok)throw Error("Price feed unavailable");
  const data=await response.json();
- // Fail closed until a timezone-aware, area-specific feed has been verified.
- if(!Array.isArray(data.hours)||!data.hours.every(x=>typeof x.time==="string"&&/(Z|[+-]\\d{2}:\\d{2})$/.test(x.time)&&Number.isFinite(x.price)))throw Error("Unverified price feed timestamps");
- const area=data.area;if(!["DK1","DK2"].includes(area))throw Error("Unknown area");
+ // Fail closed: live price feed currently lacks explicit offsets. No cron is configured.
+ const area=data.area;
+ const hours=validateFeed(data,area);
  webpush.setVapidDetails(env.VAPID_SUBJECT,env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
  const alarms=await env.DB.prepare("SELECT a.*,s.subscription_json FROM alarms a JOIN subscriptions s ON a.subscription_id=s.id WHERE a.enabled=1 AND a.area=?").bind(area).all();
  const now=Date.now();
- for(const a of alarms.results)for(const p of data.hours){
-  const start=Date.parse(p.time),due=start-a.notice_hours*3600000;
-  if(!Number.isFinite(start)||p.price>=a.threshold||now<due||now>=due+60000)continue;
-  const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time) VALUES(?,?)").bind(a.id,p.time).run();
+ const candidates=dueAlarms(alarms.results,hours,now);
+ for(const candidate of candidates){
+  const alarm=alarms.results.find(a=>a.id===candidate.alarmId);
+  const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time) VALUES(?,?)").bind(alarm.id,candidate.startTime).run();
   if(!reserved.meta.changes)continue;
-  try{await webpush.sendNotification(JSON.parse(a.subscription_json),JSON.stringify({title:"Elpris-alarm",body:`Strømpris ${p.price.toFixed(2)} kr/kWh kl. ${new Date(start).toLocaleTimeString("da-DK",{timeZone:"Europe/Copenhagen",hour:"2-digit",minute:"2-digit"})}`,url:"/Elprisv2/"}));}
-  catch(e){await env.DB.prepare("DELETE FROM deliveries WHERE alarm_id=? AND start_time=?").bind(a.id,p.time).run();console.error("Push delivery failed",e.statusCode||"unknown")}
+  try{
+   await webpush.sendNotification(JSON.parse(alarm.subscription_json),JSON.stringify({title:"Elpris-alarm",body:`Strømpris ${candidate.price.toFixed(2)} kr/kWh kl. ${new Date(candidate.startTime).toLocaleTimeString("da-DK",{timeZone:"Europe/Copenhagen",hour:"2-digit",minute:"2-digit"})}`,url:"/push-test"}));
+  }catch(e){
+   // Keep delivery reservation on uncertain network errors to avoid duplicate notifications.
+   console.error("Push delivery failed",e.statusCode||"unknown");
+  }
  }
 }
 export default {fetch:api,scheduled:(_event,env,ctx)=>ctx.waitUntil(scheduled(env))};
