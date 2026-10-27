@@ -33,3 +33,17 @@ test("service worker handles origin-bound notifications",()=>{
  assert.match(sw,/addEventListener\("notificationclick"/);
  assert.match(sw,/self\.location\.origin/);
 });
+
+test("duplicate registration does not silently replace a subscription",()=>{
+ const js=read("push-alarm-direct.js");
+ assert.match(js,/response.status===409/);
+ assert.match(js,/ændrer ikke abonnementet automatisk/);
+ assert.match(js,/response.status===401/);
+ assert.match(js,/localStorage.removeItem\(TOKEN_KEY\)/);
+});
+test("no deployment or production worker binding is introduced",()=>{
+ const config=JSON.parse(read("push-test/wrangler.jsonc"));
+ assert.equal(config.d1_databases[0].database_name,"elpris-push-isolated-test-db");
+ assert.equal(config.d1_databases[0].database_id,"2811e53d-ee9d-45d2-94dc-d8ffed33d447");
+ assert.deepEqual(config.triggers.crons,["0 * * * *"]);
+});
