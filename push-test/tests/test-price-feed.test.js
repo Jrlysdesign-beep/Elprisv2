@@ -48,3 +48,8 @@ test("missing DK2 in combined response is rejected",async()=>{
  const fetcher=async()=>({ok:true,json:async()=>({records:[record("2026-07-10T09:00:00","DK1",250)]})});
  await assert.rejects(fetchTestFeeds(Date.parse("2026-07-10T08:00:00Z"),fetcher),/Invalid area or hours/);
 });
+
+test("historical-only feed is rejected",()=>{
+ const now=Date.parse("2026-07-10T10:00:00Z");
+ assert.throws(()=>normalizeSpotRecords([record("2026-07-10T09:00:00","DK1",250)],"DK1",now),/No future prices/);
+});
