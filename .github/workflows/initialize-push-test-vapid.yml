@@ -38,7 +38,7 @@ jobs:
           test "$(git branch --show-current)" = "feature/webpush-isolated-2026-10-27"
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          node -e 'const c=require("./wrangler.jsonc"); if(c.name!=="elpris-push-isolated-test" || c.d1_databases?.[0]?.database_name!=="elpris-push-isolated-test-db" || c.triggers?.crons?.length) process.exit(1)'
+          node -e 'const c=JSON.parse(require("node:fs").readFileSync("wrangler.jsonc","utf8")); if(c.name!=="elpris-push-isolated-test" || c.d1_databases?.length!==1 || c.d1_databases[0].database_name!=="elpris-push-isolated-test-db" || c.triggers?.crons?.length) process.exit(1)'
       - name: Install dependencies
         run: npm install
       - name: Deploy test Worker with scheduled sending disabled
