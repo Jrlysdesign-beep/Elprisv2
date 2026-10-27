@@ -46,5 +46,7 @@ jobs:
         run: python3 scripts/test-api-rate-limits.py
       - name: Test encrypted backup, migrations and rollback offline
         run: python3 scripts/test-offline-migration-rollback.py
+      - name: Test migration shell verifier with fake Wrangler (offline)
+        run: python3 tests/test-verify-remote-stage-offline.py
       - name: Read-only price feed dry run
         run: npm run dry-run
