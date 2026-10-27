@@ -15,11 +15,17 @@ Current state: the Worker implements scheduled price checks, but `push-test/wran
 3. Confirm isolated Worker VAPID credentials and the test iPhone subscription are valid.
 4. Confirm the alarm threshold is for **spot price excluding VAT, electricity tax and network tariffs**, not the household total.
 5. Ensure the target is exactly `elpris-push-isolated-test`, database `elpris-push-isolated-test-db` (`2811e53d-ee9d-45d2-94dc-d8ffed33d447`). Never change the public site or its Worker.
-6. Obtain separate explicit authorization to enable automatic push. Activation requires adding a cron trigger (suggested every 5 minutes, `*/5 * * * *`) to the isolated Worker config, setting `ENABLE_AUTOMATIC_PRICE_PUSH=true` only on the isolated Worker, and deploying it. This document does **not** perform any of those steps.
+6. Obtain separate explicit authorization to enable automatic push. Activation requires adding a cron trigger (suggested once per hour at minute zero, `0 * * * *`) to the isolated Worker config, setting `ENABLE_AUTOMATIC_PRICE_PUSH=true` only on the isolated Worker, and deploying it. This document does **not** perform any of those steps.
 7. After authorization, test one real low-risk alert and inspect delivery records, then verify no duplicates. Monitor provider failures.
 
 ## Stop / rollback
 To disable automatic sends, remove/disable the isolated cron trigger and unset `ENABLE_AUTOMATIC_PRICE_PUSH` on the isolated Worker. These are Cloudflare operations and require explicit approval. The existing manual test-push endpoint is independent of the scheduled trigger.
 
 ## Important limitation
-A failed price feed or missed scheduler window can cause an alert to be missed; the system intentionally does not send old or uncertain notifications. A 5-minute cron reduces scheduling delays but does not guarantee delivery. No automatic push has been enabled by this preparation.
+A failed price feed or missed scheduler window can cause an alert to be missed; the system intentionally does not send old or uncertain notifications. An hourly cron checks only once per hour. Quarter-hour due times may be delivered up to 45 minutes late, and a zero-hour alarm for a cheap period that has already ended will be skipped. An hourly cron does not guarantee delivery. No automatic push has been enabled by this preparation.
+
+## Hourly scheduling preparation (not deployed)
+- The scheduled handler now uses an explicit 60-minute due window to catch alarms due at quarter-hour boundaries between hourly ticks. The standard engine API retains its previous 15-minute window for other callers.
+- At each hourly check, only still-upcoming cheap periods are notified for advance warnings. Zero-hour alarms are notified only while their cheap period is still active; a 15-minute-only cheap period can therefore be missed by design.
+- Keep the isolated Worker config **without** a cron and **without** `ENABLE_AUTOMATIC_PRICE_PUSH=true` until separately authorized. The existing safe deployment workflow rejects a cron trigger, so activation requires a separate, reviewed manual workflow change.
+- Run the manual GitHub dry-run audit after this change before deployment or activation.
