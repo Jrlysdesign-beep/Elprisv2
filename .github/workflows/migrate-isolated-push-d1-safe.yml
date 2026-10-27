@@ -93,14 +93,26 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Check isolated D1 schema stage before
+        run: bash scripts/verify-remote-migration-stage.sh before
+
       - name: Apply migration 001 to isolated D1 only
         run: npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --file migrations/001-delivery-status.sql
+
+      - name: Check isolated D1 schema stage 001
+        run: bash scripts/verify-remote-migration-stage.sh 001
 
       - name: Apply migration 002 to isolated D1 only
         run: npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --file migrations/002-delivery-interval.sql
 
+      - name: Check isolated D1 schema stage 002
+        run: bash scripts/verify-remote-migration-stage.sh 002
+
       - name: Apply migration 003 to isolated D1 only
         run: npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --file migrations/003-api-rate-limits.sql
+
+      - name: Check isolated D1 schema stage 003
+        run: bash scripts/verify-remote-migration-stage.sh 003
 
       - name: Verify isolated D1 schema (read-only)
         shell: bash
