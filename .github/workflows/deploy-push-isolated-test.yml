@@ -1,0 +1,25 @@
+name: Deploy isolated push test (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    environment: push-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check isolated test configuration
+        shell: bash
+        run: |
+          test -f push-test/wrangler.toml || { echo "Missing push-test/wrangler.toml; refusing deployment"; exit 1; }
+          grep -Eq '^name[[:space:]]*=[[:space:]]*"elpris-push-isolated-test"' push-test/wrangler.toml || { echo "Unexpected worker name; refusing deployment"; exit 1; }
+      - name: Deploy isolated Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: push-test
+          command: deploy --config wrangler.toml
