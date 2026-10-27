@@ -4,13 +4,15 @@ const TOKEN_KEY="elprisv2_isolated_push_token_v1";
 const $=id=>document.getElementById(id);
 const say=s=>{$("pushStatus").textContent=s};
 const b64=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
-const TEST_ORIGIN="https://elprisv2-ui-isolated-test.pages.dev"; // Planned test origin, not deployed.
+const TEST_ORIGIN="https://elprisv2-ui-isolated-test.pages.dev"; // Isolated Cloudflare Pages test origin.
 const allowed=()=>location.origin===TEST_ORIGIN;
 const installed=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 let token="";
 function auth(){if(!token)throw Error("Registrér push på denne installation først.");return {"Authorization":"Bearer "+token}}
 async function call(path,opts={}) {
- const response=await fetch(API+path,{mode:"cors",credentials:"omit",cache:"no-store",...opts});
+ let response;
+ try{response=await fetch(API+path,{mode:"cors",credentials:"omit",cache:"no-store",...opts})}
+ catch(e){throw Error("Kan ikke kontakte den isolerede push-server. Kontrollér at Worker svarer, og at CORS tillader "+location.origin+". Netværksfejl: "+(e?.message||"ukendt"))}
  let data;try{data=await response.json()}catch{throw Error("Push-serveren svarede ikke korrekt.")}
  if(!response.ok){if(response.status===409&&path==="/api/register")throw Error("Denne iPhone har allerede et push-abonnement, men adgangsnøglen mangler. Vi ændrer ikke abonnementet automatisk. Brug en særskilt testinstallation eller nulstil det gamle abonnement manuelt efter sikker gennemgang.");if(response.status===401&&path==="/api/alarms"){token="";localStorage.removeItem(TOKEN_KEY);throw Error("Adgangsnøglen er udløbet eller ugyldig. Genregistrering kræver et gyldigt abonnement.");}throw Error(data.error||"HTTP "+response.status);}
  return data;
@@ -38,6 +40,7 @@ async function register(){
  if(!reg.active)throw Error("Service worker er endnu ikke aktiv.");
  if(new URL(reg.scope).origin!==location.origin)throw Error("Service worker tilhører forkert domæne.");
  const {publicKey}=await call("/api/vapid");
+ if(typeof publicKey!=="string"||!/^[-_A-Za-z0-9]{80,100}$/.test(publicKey)||b64(publicKey).length!==65)throw Error("Push-serverens VAPID-nøgle er ugyldig.");
  const existing=await reg.pushManager.getSubscription();
  const sub=existing||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(publicKey)});
  const result=await call("/api/register",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({subscription:sub})});
