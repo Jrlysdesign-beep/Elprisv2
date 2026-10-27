@@ -1,0 +1,24 @@
+{
+  "name": "elpris-push-isolated-test",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-27",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "elpris-push-isolated-test-db",
+      "database_id": "REPLACE_WITH_NEW_TEST_D1_ID"
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGIN": "https://jrlysdesign-beep.github.io",
+    "PRICE_URL": "https://jrlysdesign-beep.github.io/Elprisv2/prices.json"
+  }
+}
