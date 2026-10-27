@@ -39,7 +39,7 @@ export function dueAlarms(alarms,hours,nowMs){
   if(!alarm.enabled||!Number.isInteger(alarm.notice_hours)||alarm.notice_hours<0||alarm.notice_hours>24||!Number.isFinite(alarm.threshold))continue;
   for(const period of cheapPeriods(hours,alarm.threshold)){
    const due=period.startMs-alarm.notice_hours*3600000;
-   if(nowMs>=due&&nowMs<due+MAX_LATE_MS&&period.startMs>nowMs)
+   if(nowMs>=due&&nowMs<due+MAX_LATE_MS&&(period.startMs>nowMs||(alarm.notice_hours===0&&nowMs<period.startMs+MAX_LATE_MS)))
     result.push({alarmId:alarm.id,startTime:period.startTime,price:period.lowestPrice,slots:period.slots,endTime:new Date(period.endMs).toISOString()});
   }
  }
