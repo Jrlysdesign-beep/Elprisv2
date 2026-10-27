@@ -1,5 +1,5 @@
 // Independent test-only feed. Prices are spot prices excluding taxes, tariffs and VAT.
-// Source: Energi Data Service, Elspotprices, SpotPriceDKK (DKK/MWh).
+// Source: Energi Data Service, DayAheadPrices, DayAheadPriceDKK (DKK/MWh).
 import {validateFeed} from "./price-engine.js";
 const clock=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Copenhagen",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
 function localWithOffset(utcMs){
@@ -22,25 +22,25 @@ export function normalizeSpotRecords(records,area,nowMs=Date.now()){
  const hours=[];
  for(const row of records){
   if(row.PriceArea!==area)continue;
-  const utc=parseUtc(row.HourUTC);
+  const utc=parseUtc(row.TimeUTC);
   if(utc<nowMs-3600000||utc>nowMs+48*3600000)continue;
-  const dkk=row.SpotPriceDKK;
-  if(row.SpotPriceDKK===null||row.SpotPriceDKK===undefined||!Number.isFinite(dkk))throw Error("Invalid spot price");
+  const dkk=row.DayAheadPriceDKK;
+  if(row.DayAheadPriceDKK===null||row.DayAheadPriceDKK===undefined||!Number.isFinite(dkk))throw Error("Invalid spot price");
   hours.push({time:localWithOffset(utc),price:dkk/1000});
  }
  if(!hours.some(h=>Date.parse(h.time)>nowMs))throw Error("No future prices for "+area);
  const validated=validateFeed({area,hours},area);
- return {area,currency:"DKK",unit:"kr/kWh",priceType:"spot_ex_vat_tax_tariffs",source:"Energi Data Service / Elspotprices",hours:hours.sort((a,b)=>Date.parse(a.time)-Date.parse(b.time)),validatedHours:validated.length};
+ return {area,currency:"DKK",unit:"kr/kWh",priceType:"spot_ex_vat_tax_tariffs",source:"Energi Data Service / DayAheadPrices",hours:hours.sort((a,b)=>Date.parse(a.time)-Date.parse(b.time)),validatedHours:validated.length};
 }
 // One request for both regions prevents unnecessary provider rate limiting.
 export async function fetchTestFeeds(nowMs=Date.now(),fetcher=fetch){
- const url=new URL("https://api.energidataservice.dk/dataset/Elspotprices");
+ const url=new URL("https://api.energidataservice.dk/dataset/DayAheadPrices");
  const local=(ms)=>localWithOffset(ms).slice(0,10);
- url.searchParams.set("start",local(nowMs-3600000));
+ url.searchParams.set("start",local(nowMs-86400000));
  url.searchParams.set("end",local(nowMs+49*3600000));
  url.searchParams.set("filter",JSON.stringify({PriceArea:["DK1","DK2"]}));
- url.searchParams.set("sort","HourUTC ASC");
- url.searchParams.set("limit","500");
+ url.searchParams.set("sort","TimeUTC ASC");
+ url.searchParams.set("limit","1000");
  const response=await fetcher(url.toString(),{headers:{accept:"application/json"},signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error("Price provider HTTP "+response.status);
  const data=await response.json();
