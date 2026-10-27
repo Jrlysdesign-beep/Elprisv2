@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {normalizeSpotRecords,fetchTestFeed,fetchTestFeeds} from "../src/test-price-feed.js";
-const record=(time,area="DK2",price=500)=>({HourUTC:time,PriceArea:area,SpotPriceDKK:price});
+const record=(time,area="DK2",price=500)=>({TimeUTC:time,PriceArea:area,DayAheadPriceDKK:price});
 test("DK1 and DK2 independent and DKK/MWh converts to kr/kWh",()=>{
  const now=Date.parse("2026-07-10T08:00:00Z");
  const rows=[record("2026-07-10T09:00:00","DK1",250),record("2026-07-10T09:00:00","DK2",500)];
@@ -52,4 +52,13 @@ test("missing DK2 in combined response is rejected",async()=>{
 test("historical-only feed is rejected",()=>{
  const now=Date.parse("2026-07-10T10:00:00Z");
  assert.throws(()=>normalizeSpotRecords([record("2026-07-10T09:00:00","DK1",250)],"DK1",now),/No future prices/);
+});
+
+test("15-minute intervals stay distinct and convert correctly",()=>{
+ const now=Date.parse("2026-10-27T08:00:00Z");
+ const rows=[record("2026-10-27T09:00:00","DK1",250),record("2026-10-27T09:15:00","DK1",300),record("2026-10-27T09:30:00","DK1",350),record("2026-10-27T09:45:00","DK1",400)];
+ const feed=normalizeSpotRecords(rows,"DK1",now);
+ assert.equal(feed.validatedHours,4);
+ assert.deepEqual(feed.hours.map(x=>x.price),[0.25,0.3,0.35,0.4]);
+ assert.deepEqual(feed.hours.map(x=>x.time.slice(11,16)),["10:00","10:15","10:30","10:45"]);
 });
