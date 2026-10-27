@@ -31,4 +31,4 @@ for(const area of ["DK1","DK2"]){
  }catch(e){summary.tests["liveFeed"+area]={status:"blocked",reason:e.message};}
 }
 console.log(JSON.stringify(summary,null,2));
-if(Object.values(summary.tests).some(x=>x.status==="rejected"||x.status==="blocked")||summary.tests.alarmAndDuplicate?.status!=="passed")process.exitCode=1;
+if(Object.values(summary.tests).some(x=>x.status==="rejected"||x.status==="blocked")||summary.tests.alarmAndDuplicate?.status!=="passed"||["DK1","DK2"].some(area=>summary.tests["liveFeed"+area]?.status!=="valid"))process.exitCode=1;
