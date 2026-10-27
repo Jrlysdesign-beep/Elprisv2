@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {validateFeed,dueAlarms,uniqueCandidates,cheapPeriods} from "../src/price-engine.js";
+import {validateFeed,dueAlarms,uniqueCandidates,cheapPeriods,HOURLY_WINDOW_MS} from "../src/price-engine.js";
 const feed=(hours)=>({area:"DK2",hours});
 test("rejects production feed without explicit offset",()=>{
  assert.throws(()=>validateFeed(feed([{time:"2026-10-27T09:00:00",price:0.2}]),"DK2"));
@@ -147,4 +147,31 @@ test("zero-hour alert is due at the cheap period start, not beforehand",()=>{
  assert.equal(dueAlarms([alarm({notice_hours:0})],hours,start).length,1);
  assert.equal(dueAlarms([alarm({notice_hours:0})],hours,start+5*60000).length,1);
  assert.equal(dueAlarms([alarm({notice_hours:0})],hours,start+15*60000).length,0);
+});
+
+test("hourly check catches quarter-hour due times within previous hour",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-27T15:15:00+01:00",0.4)]),"DK2");
+ const now=Date.parse("2026-10-27T12:00:00Z"); // Due 11:15Z, checked at 12:00Z
+ assert.equal(dueAlarms([alarm()],hours,now).length,0);
+ assert.equal(dueAlarms([alarm()],hours,now,HOURLY_WINDOW_MS).length,1);
+ assert.equal(dueAlarms([alarm()],hours,now+15*60000,HOURLY_WINDOW_MS).length,0);
+});
+test("hourly zero-hour alarm does not notify after a short cheap period has ended",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-27T15:15:00+01:00",0.4)]),"DK2");
+ const now=Date.parse("2026-10-27T15:00:00Z"); // 16:00 local, period already over
+ assert.equal(dueAlarms([alarm({notice_hours:0})],hours,now,HOURLY_WINDOW_MS).length,0);
+});
+test("hourly zero-hour alarm can notify during a cheap period spanning the hourly check",()=>{
+ const hours=validateFeed(feed([
+  quarter("2026-10-27T15:15:00+01:00",0.4),
+  quarter("2026-10-27T15:30:00+01:00",0.4),
+  quarter("2026-10-27T15:45:00+01:00",0.4),
+  quarter("2026-10-27T16:00:00+01:00",0.4)
+ ]),"DK2");
+ const now=Date.parse("2026-10-27T15:00:00Z");
+ assert.equal(dueAlarms([alarm({notice_hours:0})],hours,now,HOURLY_WINDOW_MS).length,1);
+});
+test("hourly window is explicitly opt-in and rejects arbitrary windows",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-27T15:00:00+01:00",0.4)]),"DK2");
+ assert.throws(()=>dueAlarms([alarm()],hours,Date.now(),600000),/Invalid scheduler window/);
 });
