@@ -32,14 +32,18 @@ export function cheapPeriods(hours,threshold){
  return periods;
 }
 export const MAX_LATE_MS=15*60*1000;
-export function dueAlarms(alarms,hours,nowMs){
+export const HOURLY_WINDOW_MS=60*60*1000;
+// An hourly scheduler evaluates alarms due since its previous scheduled tick.
+// The 15-minute default preserves manual/legacy callers' narrower window.
+export function dueAlarms(alarms,hours,nowMs,lateWindowMs=MAX_LATE_MS){
+ if(![MAX_LATE_MS,HOURLY_WINDOW_MS].includes(lateWindowMs))throw Error("Invalid scheduler window");
  if(!Number.isFinite(nowMs))throw Error("Invalid clock");
  const result=[];
  for(const alarm of alarms){
   if(!alarm.enabled||!Number.isInteger(alarm.notice_hours)||alarm.notice_hours<0||alarm.notice_hours>24||!Number.isFinite(alarm.threshold))continue;
   for(const period of cheapPeriods(hours,alarm.threshold)){
    const due=period.startMs-alarm.notice_hours*3600000;
-   if(nowMs>=due&&nowMs<due+MAX_LATE_MS&&(period.startMs>nowMs||(alarm.notice_hours===0&&nowMs<period.startMs+MAX_LATE_MS)))
+   if(nowMs>=due&&nowMs<due+lateWindowMs&&(period.startMs>nowMs||(alarm.notice_hours===0&&nowMs<period.endMs)))
     result.push({alarmId:alarm.id,startTime:period.startTime,price:period.lowestPrice,slots:period.slots,endTime:new Date(period.endMs).toISOString()});
   }
  }
