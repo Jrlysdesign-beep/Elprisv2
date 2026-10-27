@@ -28,6 +28,7 @@ export function normalizeSpotRecords(records,area,nowMs=Date.now()){
   if(row.SpotPriceDKK===null||row.SpotPriceDKK===undefined||!Number.isFinite(dkk))throw Error("Invalid spot price");
   hours.push({time:localWithOffset(utc),price:dkk/1000});
  }
+ if(!hours.some(h=>Date.parse(h.time)>nowMs))throw Error("No future prices for "+area);
  const validated=validateFeed({area,hours},area);
  return {area,currency:"DKK",unit:"kr/kWh",priceType:"spot_ex_vat_tax_tariffs",source:"Energi Data Service / Elspotprices",hours:hours.sort((a,b)=>Date.parse(a.time)-Date.parse(b.time)),validatedHours:validated.length};
 }
