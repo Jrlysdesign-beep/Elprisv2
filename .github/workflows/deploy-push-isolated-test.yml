@@ -10,16 +10,25 @@ jobs:
   deploy-test:
     runs-on: ubuntu-latest
     environment: push-test
+    defaults:
+      run:
+        working-directory: push-test
     steps:
       - uses: actions/checkout@v4
-      - name: Check isolated test configuration
+      - name: Validate isolated Worker configuration
         shell: bash
         run: |
-          test -f push-test/wrangler.toml || { echo "Missing push-test/wrangler.toml; refusing deployment"; exit 1; }
-          grep -Eq '^name[[:space:]]*=[[:space:]]*"elpris-push-isolated-test"' push-test/wrangler.toml || { echo "Unexpected worker name; refusing deployment"; exit 1; }
+          test -f wrangler.jsonc
+          grep -q '"name": "elpris-push-isolated-test"' wrangler.jsonc
+          if grep -q REPLACE_WITH_NEW_TEST_D1_ID wrangler.jsonc; then
+            echo "A separate D1 test database must be configured before deployment"
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm install
       - name: Deploy isolated Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: push-test
-          command: deploy --config wrangler.toml
+          command: deploy --config wrangler.jsonc
