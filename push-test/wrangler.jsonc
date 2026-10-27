@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "elpris-push-isolated-test-db",
-      "database_id": "REPLACE_WITH_NEW_TEST_D1_ID"
+      "database_id": "2811e53d-ee9d-45d2-94dc-d8ffed33d447"
     }
   ],
   "vars": {
