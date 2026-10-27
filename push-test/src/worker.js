@@ -11,7 +11,12 @@ async function api(req,env){
  if(req.method==="GET"&&url.pathname==="/push-sw.js")return new Response(`self.addEventListener("push",event=>{let data={};try{data=event.data?.json()||{}}catch{}event.waitUntil(self.registration.showNotification(data.title||"Elpris test",{body:data.body||"Testbesked",data:{url:"/push-test"}}))});self.addEventListener("notificationclick",event=>{event.notification.close();event.waitUntil(clients.openWindow("/push-test"))});`,{headers:{"content-type":"text/javascript","cache-control":"no-store","service-worker-allowed":"/"}});
  if(req.method==="GET"&&url.pathname==="/push-test-client.js")return new Response(testClient,{headers:{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store"}});
  if(req.method==="GET"&&url.pathname==="/health")return json({ok:true,service:"elpris-push-isolated-test",pushConfigured:!!(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT)},200,{"cache-control":"no-store"});
- if(req.headers.get("origin")!==env.ALLOWED_ORIGIN)return json({error:"Origin not allowed"},403,h);
+ const origin=req.headers.get("origin");
+ const sameOrigin=origin===url.origin;
+ const allowedExternal=origin===env.ALLOWED_ORIGIN;
+ // Same-origin GET requests often have no Origin header. Reject cross-origin callers.
+ if(req.method==="GET" ? (origin!==null&&!sameOrigin&&!allowedExternal) : (!sameOrigin&&!allowedExternal))
+  return json({error:"Origin not allowed"},403,h);
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:h});
  if(req.method==="GET"&&url.pathname==="/api/vapid")return env.VAPID_PUBLIC_KEY?json({publicKey:env.VAPID_PUBLIC_KEY},200,h):json({error:"Push not configured"},503,h);
  if(req.method==="POST"&&url.pathname==="/api/register"){
