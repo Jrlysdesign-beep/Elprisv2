@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS subscriptions (id TEXT PRIMARY KEY, endpoint TEXT NOT NULL UNIQUE, subscription_json TEXT NOT NULL, token_hash TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS alarms (id TEXT PRIMARY KEY, subscription_id TEXT NOT NULL, area TEXT NOT NULL CHECK(area IN ('DK1','DK2')), threshold REAL NOT NULL, notice_hours INTEGER NOT NULL CHECK(notice_hours BETWEEN 0 AND 24), enabled INTEGER NOT NULL DEFAULT 1, FOREIGN KEY(subscription_id) REFERENCES subscriptions(id));
+CREATE TABLE IF NOT EXISTS deliveries (alarm_id TEXT NOT NULL, start_time TEXT NOT NULL, PRIMARY KEY(alarm_id,start_time));
