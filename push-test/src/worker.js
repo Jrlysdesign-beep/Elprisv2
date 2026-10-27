@@ -5,7 +5,7 @@ import {validateFeed,dueAlarms,HOURLY_WINDOW_MS} from "./price-engine.js";
 import testClient from "./test-client.js";
 import webpush from "web-push";
 const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json",...headers}});
-const cors=(req,env)=>({"access-control-allow-origin":env.ALLOWED_ORIGIN,"access-control-allow-methods":"GET,POST,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","vary":"Origin"});
+const cors=(req,env)=>({"access-control-allow-origin":req.headers.get("origin")===env.PUSH_UI_TEST_ORIGIN?env.PUSH_UI_TEST_ORIGIN:env.ALLOWED_ORIGIN,"access-control-allow-methods":"GET,POST,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","vary":"Origin"});
 const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const token=req=>req.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{32,})$/)?.[1];
 async function limitRequest(env,action,subject){
@@ -23,7 +23,7 @@ async function api(req,env){
  if(req.method==="GET"&&url.pathname==="/health")return json({ok:true,service:"elpris-push-isolated-test",pushConfigured:!!(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT)},200,{"cache-control":"no-store"});
  const origin=req.headers.get("origin");
  const sameOrigin=origin===url.origin;
- const allowedExternal=origin===env.ALLOWED_ORIGIN;
+ const allowedExternal=origin===env.ALLOWED_ORIGIN || (!!env.PUSH_UI_TEST_ORIGIN && origin===env.PUSH_UI_TEST_ORIGIN);
  // Same-origin GET requests often have no Origin header. Reject cross-origin callers.
  if(req.method==="GET" ? (origin!==null&&!sameOrigin&&!allowedExternal) : (!sameOrigin&&!allowedExternal))
   return json({error:"Origin not allowed"},403,h);
