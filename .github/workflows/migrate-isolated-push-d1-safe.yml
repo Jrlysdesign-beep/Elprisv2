@@ -1,0 +1,101 @@
+name: Backup and migrate isolated push D1 (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type MIGRATE-ISOLATED-D1-001-002-003 to authorize backup and migrations of TEST database only'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: elpris-isolated-d1-migration
+  cancel-in-progress: false
+
+jobs:
+  backup-and-migrate:
+    if: github.event.inputs.confirmation == 'MIGRATE-ISOLATED-D1-001-002-003'
+    runs-on: ubuntu-latest
+    environment: push-test
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: push-test
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DB_NAME: elpris-push-isolated-test-db
+      DB_ID: 2811e53d-ee9d-45d2-94dc-d8ffed33d447
+    steps:
+      - name: Check out isolated test branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/webpush-isolated-2026-10-27
+
+      - name: Strict target and credential guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          if(c.name!=='elpris-push-isolated-test' ||
+             c.d1_databases?.length!==1 ||
+             c.d1_databases[0].binding!=='DB' ||
+             c.d1_databases[0].database_name!=='elpris-push-isolated-test-db' ||
+             c.d1_databases[0].database_id!=='2811e53d-ee9d-45d2-94dc-d8ffed33d447' ||
+             c.triggers?.crons?.length) process.exit(1);
+          for(const n of ['001-delivery-status.sql','002-delivery-interval.sql','003-api-rate-limits.sql']){
+            if(!fs.existsSync('migrations/'+n))process.exit(1);
+          }
+          NODE
+
+      - name: Install Wrangler (no deployment)
+        run: npm install --ignore-scripts
+
+      - name: Export remote isolated D1 backup before any write
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          npx wrangler d1 export "$DB_NAME" --remote --config wrangler.jsonc --output backup/isolated-d1-before-migration.sql
+          test -s backup/isolated-d1-before-migration.sql
+          grep -q 'CREATE TABLE' backup/isolated-d1-before-migration.sql
+          sha256sum backup/isolated-d1-before-migration.sql > backup/SHA256SUMS
+          echo "Isolated database backup created and validated."
+
+      - name: Upload backup artifact (must succeed before migrations)
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-d1-backup-${{ github.run_id }}
+          path: push-test/backup/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Apply migration 001 to isolated D1 only
+        run: npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --file migrations/001-delivery-status.sql
+
+      - name: Apply migration 002 to isolated D1 only
+        run: npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --file migrations/002-delivery-interval.sql
+
+      - name: Apply migration 003 to isolated D1 only
+        run: npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --file migrations/003-api-rate-limits.sql
+
+      - name: Verify isolated D1 schema (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('deliveries','api_rate_limits') ORDER BY name"
+          npx wrangler d1 execute "$DB_NAME" --remote --config wrangler.jsonc --command "PRAGMA table_info(deliveries)"
+          echo "Review output: deliveries must include status, attempted_at, completed_at, http_status, end_time."
+          echo "This workflow does NOT deploy the Worker or enable push."
+
+      - name: Clean up local backup from runner
+        if: always()
+        shell: bash
+        run: rm -rf backup
