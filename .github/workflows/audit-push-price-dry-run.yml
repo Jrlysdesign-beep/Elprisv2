@@ -48,5 +48,7 @@ jobs:
         run: python3 scripts/test-offline-migration-rollback.py
       - name: Test migration shell verifier with fake Wrangler (offline)
         run: python3 tests/test-verify-remote-stage-offline.py
+      - name: Rehearse encrypted D1 manual recovery offline (synthetic data)
+        run: python3 scripts/test-manual-d1-recovery-drill.py
       - name: Read-only price feed dry run
         run: npm run dry-run
