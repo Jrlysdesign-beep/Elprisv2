@@ -33,10 +33,12 @@ export function normalizeSpotRecords(records,area,nowMs=Date.now()){
 }
 export async function fetchTestFeed(area,nowMs=Date.now(),fetcher=fetch){
  if(!["DK1","DK2"].includes(area))throw Error("Invalid price area");
- const start=new Date(nowMs-3600000).toISOString().slice(0,19);
- const end=new Date(nowMs+49*3600000).toISOString().slice(0,19);
+ const start=new Date(nowMs-3600000).toISOString().slice(0,16);
+ const end=new Date(nowMs+49*3600000).toISOString().slice(0,16);
  const url=new URL("https://api.energidataservice.dk/dataset/Elspotprices");
- url.searchParams.set("start",start);url.searchParams.set("end",end);
+ // Provider start/end are interpreted as Danish local time, not UTC.
+ const local=(ms)=>localWithOffset(ms).slice(0,16);
+ url.searchParams.set("start",local(nowMs-3600000));url.searchParams.set("end",local(nowMs+49*3600000));
  url.searchParams.set("filter",JSON.stringify({PriceArea:[area]}));
  url.searchParams.set("sort","HourUTC ASC");url.searchParams.set("limit","200");
  const response=await fetcher(url.toString(),{headers:{accept:"application/json"},signal:AbortSignal.timeout(12000)});
