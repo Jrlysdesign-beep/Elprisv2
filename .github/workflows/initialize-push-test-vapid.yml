@@ -1,0 +1,47 @@
+name: Initialize isolated push VAPID keys (manual, test only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type INITIALIZE-PUSH-TEST to authorize creating test Worker and secrets'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: initialize-push-test
+  cancel-in-progress: false
+
+jobs:
+  initialize:
+    if: github.event.inputs.confirmation == 'INITIALIZE-PUSH-TEST'
+    runs-on: ubuntu-latest
+    environment: push-test
+    defaults:
+      run:
+        working-directory: push-test
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out test branch only
+        uses: actions/checkout@v4
+        with:
+          ref: feature/webpush-isolated-2026-10-27
+      - name: Validate isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "feature/webpush-isolated-2026-10-27"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node -e 'const c=require("./wrangler.jsonc"); if(c.name!=="elpris-push-isolated-test" || c.d1_databases?.[0]?.database_name!=="elpris-push-isolated-test-db" || c.triggers?.crons?.length) process.exit(1)'
+      - name: Install dependencies
+        run: npm install
+      - name: Deploy test Worker with scheduled sending disabled
+        run: npx wrangler deploy --config wrangler.jsonc
+      - name: Generate VAPID pair and store privately in isolated Worker
+        run: node scripts/initialize-vapid.mjs
