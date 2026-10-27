@@ -4,7 +4,8 @@ const TOKEN_KEY="elprisv2_isolated_push_token_v1";
 const $=id=>document.getElementById(id);
 const say=s=>{$("pushStatus").textContent=s};
 const b64=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
-const TEST_ORIGIN="https://elprisv2-ui-isolated-test.pages.dev"; // Planned test origin, not deployed.\nconst allowed=()=>location.origin===TEST_ORIGIN;
+const TEST_ORIGIN="https://elprisv2-ui-isolated-test.pages.dev"; // Planned test origin, not deployed.
+const allowed=()=>location.origin===TEST_ORIGIN;
 const installed=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 let token="";
 function auth(){if(!token)throw Error("Registrér push på denne installation først.");return {"Authorization":"Bearer "+token}}
