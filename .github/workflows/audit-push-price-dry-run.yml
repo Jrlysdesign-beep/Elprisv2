@@ -23,6 +23,16 @@ jobs:
           set -euo pipefail
           test "$(git branch --show-current)" = "feature/webpush-isolated-2026-10-27"
           node -e 'const c=JSON.parse(require("node:fs").readFileSync("wrangler.jsonc","utf8"));if(c.name!=="elpris-push-isolated-test"||c.triggers?.crons?.length)process.exit(1)'
+      - name: Check Worker and module syntax without executing push
+        run: |
+          node --check src/worker.js
+          node --check src/price-engine.js
+          node --check src/test-price-feed.js
+          node --check src/delivery-status.js
+      - name: Build isolated Worker locally without deploying
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npx wrangler deploy --dry-run --outdir /tmp/elpris-isolated-worker-build --config wrangler.jsonc
       - name: Run timezone and duplicate unit tests
         run: npm test
       - name: Real SQLite concurrent reservation test (temporary database only)
