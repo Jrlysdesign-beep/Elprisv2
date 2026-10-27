@@ -5,10 +5,12 @@ const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-25
 const token=req=>req.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{32,})$/)?.[1];
 async function api(req,env){
  const url=new URL(req.url),h=cors(req,env);
+ if(req.method==="GET"&&url.pathname==="/health")return json({ok:true,service:"elpris-push-isolated-test",pushConfigured:!!(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT)},200,{"cache-control":"no-store"});
  if(req.headers.get("origin")!==env.ALLOWED_ORIGIN)return json({error:"Origin not allowed"},403,h);
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:h});
- if(req.method==="GET"&&url.pathname==="/api/vapid")return json({publicKey:env.VAPID_PUBLIC_KEY},200,h);
+ if(req.method==="GET"&&url.pathname==="/api/vapid")return env.VAPID_PUBLIC_KEY?json({publicKey:env.VAPID_PUBLIC_KEY},200,h):json({error:"Push not configured"},503,h);
  if(req.method==="POST"&&url.pathname==="/api/register"){
+  if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY)return json({error:"Push not configured"},503,h);
   const body=await req.json();if(!body.subscription?.endpoint?.startsWith("https://")||!body.subscription?.keys?.p256dh||!body.subscription?.keys?.auth)return json({error:"Invalid subscription"},400,h);
   const t=crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-",""),id=crypto.randomUUID();
   await env.DB.prepare("INSERT INTO subscriptions(id,endpoint,subscription_json,token_hash,created_at) VALUES(?,?,?,?,?)").bind(id,body.subscription.endpoint,JSON.stringify(body.subscription),await hash(t),Date.now()).run();
@@ -26,6 +28,7 @@ async function api(req,env){
  return json({error:"Not found"},404,h);
 }
 async function scheduled(env){
+ if(!env.VAPID_SUBJECT||!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY)throw Error("Push keys not configured");
  const response=await fetch(env.PRICE_URL,{headers:{"accept":"application/json"}});if(!response.ok)throw Error("Price feed unavailable");
  const data=await response.json();
  // Fail closed until a timezone-aware, area-specific feed has been verified.
