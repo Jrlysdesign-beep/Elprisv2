@@ -1,6 +1,6 @@
 {
-  "name": "Elpris hjemme",
-  "short_name": "Elpris",
+  "name": "Elprisv2 – iPhone push test",
+  "short_name": "Elpris TEST",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#081017",
@@ -16,5 +16,7 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "id": "/",
+  "scope": "./"
 }
