@@ -31,6 +31,7 @@ export function cheapPeriods(hours,threshold){
  }
  return periods;
 }
+export const MAX_LATE_MS=15*60*1000;
 export function dueAlarms(alarms,hours,nowMs){
  if(!Number.isFinite(nowMs))throw Error("Invalid clock");
  const result=[];
@@ -38,7 +39,7 @@ export function dueAlarms(alarms,hours,nowMs){
   if(!alarm.enabled||!Number.isInteger(alarm.notice_hours)||alarm.notice_hours<0||alarm.notice_hours>24||!Number.isFinite(alarm.threshold))continue;
   for(const period of cheapPeriods(hours,alarm.threshold)){
    const due=period.startMs-alarm.notice_hours*3600000;
-   if(nowMs>=due&&nowMs<due+60000&&period.startMs>nowMs)
+   if(nowMs>=due&&nowMs<due+MAX_LATE_MS&&period.startMs>nowMs)
     result.push({alarmId:alarm.id,startTime:period.startTime,price:period.lowestPrice,slots:period.slots,endTime:new Date(period.endMs).toISOString()});
   }
  }
