@@ -69,7 +69,7 @@ async function scheduled(env){
  const candidates=dueAlarms(alarms.results,hours,now);
  for(const candidate of candidates){
   const alarm=alarms.results.find(a=>a.id===candidate.alarmId);
-  const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time,status,attempted_at) VALUES(?,?,'reserved',?)").bind(alarm.id,candidate.startTime,Date.now()).run();
+  const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time,end_time,status,attempted_at) SELECT ?,?,?,'reserved',? WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE alarm_id=? AND start_time<? AND COALESCE(end_time,datetime(start_time,'+15 minutes'))>?)").bind(alarm.id,candidate.startTime,candidate.endTime,Date.now(),alarm.id,candidate.endTime,candidate.startTime).run();
   if(!reserved.meta.changes)continue;
   try{
    const response=await webpush.sendNotification(JSON.parse(alarm.subscription_json),JSON.stringify({title:"Elpris-alarm",body:`Strømpris ${candidate.price.toFixed(2)} kr/kWh kl. ${new Date(candidate.startTime).toLocaleTimeString("da-DK",{timeZone:"Europe/Copenhagen",hour:"2-digit",minute:"2-digit"})}`,url:"/push-test"}));
