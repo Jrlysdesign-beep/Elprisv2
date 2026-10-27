@@ -31,18 +31,24 @@ export function normalizeSpotRecords(records,area,nowMs=Date.now()){
  const validated=validateFeed({area,hours},area);
  return {area,currency:"DKK",unit:"kr/kWh",priceType:"spot_ex_vat_tax_tariffs",source:"Energi Data Service / Elspotprices",hours:hours.sort((a,b)=>Date.parse(a.time)-Date.parse(b.time)),validatedHours:validated.length};
 }
-export async function fetchTestFeed(area,nowMs=Date.now(),fetcher=fetch){
- if(!["DK1","DK2"].includes(area))throw Error("Invalid price area");
- const start=new Date(nowMs-3600000).toISOString().slice(0,16);
- const end=new Date(nowMs+49*3600000).toISOString().slice(0,16);
+// One request for both regions prevents unnecessary provider rate limiting.
+export async function fetchTestFeeds(nowMs=Date.now(),fetcher=fetch){
  const url=new URL("https://api.energidataservice.dk/dataset/Elspotprices");
- // Provider start/end are interpreted as Danish local time, not UTC.
- const local=(ms)=>localWithOffset(ms).slice(0,16);
- url.searchParams.set("start",local(nowMs-3600000));url.searchParams.set("end",local(nowMs+49*3600000));
- url.searchParams.set("filter",JSON.stringify({PriceArea:[area]}));
- url.searchParams.set("sort","HourUTC ASC");url.searchParams.set("limit","200");
+ const local=(ms)=>localWithOffset(ms).slice(0,10);
+ url.searchParams.set("start",local(nowMs-3600000));
+ url.searchParams.set("end",local(nowMs+49*3600000));
+ url.searchParams.set("filter",JSON.stringify({PriceArea:["DK1","DK2"]}));
+ url.searchParams.set("sort","HourUTC ASC");
+ url.searchParams.set("limit","500");
  const response=await fetcher(url.toString(),{headers:{accept:"application/json"},signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error("Price provider HTTP "+response.status);
  const data=await response.json();
- return normalizeSpotRecords(data.records,area,nowMs);
+ if(!Array.isArray(data.records))throw Error("Price provider returned no records array");
+ const feeds={};
+ for(const area of ["DK1","DK2"])feeds[area]=normalizeSpotRecords(data.records,area,nowMs);
+ return feeds;
+}
+export async function fetchTestFeed(area,nowMs=Date.now(),fetcher=fetch){
+ if(!["DK1","DK2"].includes(area))throw Error("Invalid price area");
+ return (await fetchTestFeeds(nowMs,fetcher))[area];
 }
