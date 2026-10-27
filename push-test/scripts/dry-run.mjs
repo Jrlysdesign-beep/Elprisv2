@@ -1,7 +1,7 @@
 import {fetchTestFeeds} from "../src/test-price-feed.js";
 import {validateFeed,dueAlarms,uniqueCandidates} from "../src/price-engine.js";
 
-const PRICE_URL="https://api.energidataservice.dk/dataset/Elspotprices";
+const PRICE_URL="https://api.energidataservice.dk/dataset/DayAheadPrices";
 const now=Date.now();
 const alarms=[{id:"dry-run-DK2",enabled:1,threshold:0.5,notice_hours:3}];
 const summary={mode:"dry-run",sent:0,dbWrites:0,liveAppChanges:0,feedUrl:PRICE_URL,checkedAt:new Date(now).toISOString(),tests:{}};
