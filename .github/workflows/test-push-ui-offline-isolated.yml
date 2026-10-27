@@ -1,0 +1,41 @@
+name: "Elprisv2 - isolated push UI offline tests"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: elprisv2-push-ui-offline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  offline-tests:
+    name: "Six offline Node.js tests (no deploy)"
+    if: github.ref == 'refs/heads/feature/elprisv2-integrated-alarm-ui-2026-10-27'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+    steps:
+      - name: "Check isolated branch"
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = "refs/heads/feature/elprisv2-integrated-alarm-ui-2026-10-27"
+      - name: "Checkout exact selected commit (read-only)"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "Set up Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: "Check syntax of direct push client and service worker"
+        run: |
+          node --check push-alarm-direct.js
+          node --check sw.js
+      - name: "Run exactly six isolated offline tests"
+        run: node --test tests/push-ui-isolation.test.mjs
