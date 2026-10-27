@@ -50,7 +50,12 @@ async function api(req,env){
   try{subscription=parseRegistration(raw)}catch(e){return json({error:e.message},e.message==="Payload too large"?413:400,h)}
   if(!await limitRequest(env,"register",ip))return json({error:"Registration rate limit exceeded"},429,{...h,"retry-after":"3600"});
   const t=crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-",""),id=crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO subscriptions(id,endpoint,subscription_json,token_hash,created_at) VALUES(?,?,?,?,?)").bind(id,subscription.endpoint,JSON.stringify(subscription),await hash(t),Date.now()).run();
+  try{
+   await env.DB.prepare("INSERT INTO subscriptions(id,endpoint,subscription_json,token_hash,created_at) VALUES(?,?,?,?,?)").bind(id,subscription.endpoint,JSON.stringify(subscription),await hash(t),Date.now()).run();
+  }catch(e){
+   if(/UNIQUE constraint failed/i.test(String(e.message)))return json({error:"Subscription already registered"},409,h);
+   throw e;
+  }
   return json({token:t},201,h);
  }
  const t=token(req);if(!t)return json({error:"Authorization required"},401,h);
