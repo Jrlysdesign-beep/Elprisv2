@@ -2,7 +2,7 @@
 export const OFFSET_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/;
 const dkClock = new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Copenhagen",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
 export function validateFeed(data,area){
- if(!data||data.area!==area||!["DK1","DK2"].includes(area)||!Array.isArray(data.hours)||!data.hours.length||data.hours.length>240)throw Error("Invalid area or hours");
+ if(!data||data.area!==area||!["DK1","DK2"].includes(area)||!Array.isArray(data.hours)||!data.hours.length||data.hours.length>1000)throw Error("Invalid area or hours");
  const seen=new Set();
  return data.hours.map(p=>{
   if(typeof p.time!=="string"||!OFFSET_TIME.test(p.time)||!Number.isFinite(p.price)||p.price< -10||p.price>100)throw Error("Invalid time or price");
