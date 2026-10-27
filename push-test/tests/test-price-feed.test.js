@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {normalizeSpotRecords,fetchTestFeed} from "../src/test-price-feed.js";
+import {normalizeSpotRecords,fetchTestFeed,fetchTestFeeds} from "../src/test-price-feed.js";
 const record=(time,area="DK2",price=500)=>({HourUTC:time,PriceArea:area,SpotPriceDKK:price});
 test("DK1 and DK2 independent and DKK/MWh converts to kr/kWh",()=>{
  const now=Date.parse("2026-07-10T08:00:00Z");
@@ -26,9 +26,25 @@ test("missing data and bad prices fail closed",()=>{
 test("fetches isolated upstream URL without writing or sending",async()=>{
  const now=Date.parse("2026-07-10T08:00:00Z");
  let request;
- const fetcher=async(url)=>{request=new URL(url);return {ok:true,json:async()=>({records:[record("2026-07-10T09:00:00","DK1",250)]})};};
+ const fetcher=async(url)=>{request=new URL(url);return {ok:true,json:async()=>({records:[record("2026-07-10T09:00:00","DK1",250),record("2026-07-10T09:00:00","DK2",500)]})};};
  const a=await fetchTestFeed("DK1",now,fetcher);
  assert.equal(a.validatedHours,1);
  assert.equal(request.hostname,"api.energidataservice.dk");
  assert.match(request.searchParams.get("filter"),/DK1/);
+});
+
+test("both regions fetched in exactly one request",async()=>{
+ let calls=0;
+ const now=Date.parse("2026-07-10T08:00:00Z");
+ const fetcher=async()=>{calls++;return {ok:true,json:async()=>({records:[record("2026-07-10T09:00:00","DK1",250),record("2026-07-10T09:00:00","DK2",500)]})};};
+ const feeds=await fetchTestFeeds(now,fetcher);
+ assert.equal(calls,1);assert.equal(feeds.DK1.hours[0].price,0.25);assert.equal(feeds.DK2.hours[0].price,0.5);
+});
+test("provider 429 blocks both regions safely",async()=>{
+ const fetcher=async()=>({ok:false,status:429});
+ await assert.rejects(fetchTestFeeds(Date.parse("2026-07-10T08:00:00Z"),fetcher),/HTTP 429/);
+});
+test("missing DK2 in combined response is rejected",async()=>{
+ const fetcher=async()=>({ok:true,json:async()=>({records:[record("2026-07-10T09:00:00","DK1",250)]})});
+ await assert.rejects(fetchTestFeeds(Date.parse("2026-07-10T08:00:00Z"),fetcher),/Invalid area or hours/);
 });
