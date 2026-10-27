@@ -47,3 +47,18 @@ test("no deployment or production worker binding is introduced",()=>{
  assert.equal(config.d1_databases[0].database_id,"2811e53d-ee9d-45d2-94dc-d8ffed33d447");
  assert.deepEqual(config.triggers.crons,["0 * * * *"]);
 });
+
+test("iPhone test manifest is distinct and scoped",()=>{
+ const manifest=JSON.parse(read("manifest.webmanifest"));
+ assert.match(manifest.name,/test/i);
+ assert.equal(manifest.short_name,"Elpris TEST");
+ assert.equal(manifest.start_url,"./index.html");
+ assert.equal(manifest.scope,"./");
+});
+test("test service worker caches the push client but not live prices",()=>{
+ const sw=read("sw.js");
+ assert.match(sw,/elprisv2-isolated-iphone-v1/);
+ assert.match(sw,/\.\/push-alarm-direct\.js/);
+ assert.match(sw,/url\.origin!==self\.location\.origin/);
+ assert.match(sw,/prices\.json/);
+});
