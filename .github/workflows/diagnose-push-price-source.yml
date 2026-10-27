@@ -1,0 +1,22 @@
+name: Diagnose isolated DK1 DK2 price source (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: push-test
+    steps:
+      - name: Check out isolated test branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/webpush-isolated-2026-10-27
+      - name: Verify isolated branch and no cron
+        run: |
+          test "$(git branch --show-current)" = "feature/webpush-isolated-2026-10-27"
+          node -e 'const c=JSON.parse(require("node:fs").readFileSync("wrangler.jsonc","utf8"));if(c.name!=="elpris-push-isolated-test"||c.triggers?.crons?.length)process.exit(1)'
+      - name: Compare price provider datasets without writes
+        run: node scripts/diagnose-price-source.mjs
