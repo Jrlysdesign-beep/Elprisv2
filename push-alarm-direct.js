@@ -11,7 +11,7 @@ function auth(){if(!token)throw Error("Registrér push på denne installation f�
 async function call(path,opts={}) {
  const response=await fetch(API+path,{mode:"cors",credentials:"omit",cache:"no-store",...opts});
  let data;try{data=await response.json()}catch{throw Error("Push-serveren svarede ikke korrekt.")}
- if(!response.ok)throw Error(data.error||"HTTP "+response.status);
+ if(!response.ok){if(response.status===409&&path==="/api/register")throw Error("Denne iPhone har allerede et push-abonnement, men adgangsnøglen mangler. Vi ændrer ikke abonnementet automatisk. Brug en særskilt testinstallation eller nulstil det gamle abonnement manuelt efter sikker gennemgang.");if(response.status===401&&path==="/api/alarms"){token="";localStorage.removeItem(TOKEN_KEY);throw Error("Adgangsnøglen er udløbet eller ugyldig. Genregistrering kræver et gyldigt abonnement.");}throw Error(data.error||"HTTP "+response.status);}
  return data;
 }
 async function list(){
@@ -34,6 +34,7 @@ async function register(){
  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))throw Error("Web Push understøttes ikke her.");
  if(await Notification.requestPermission()!=="granted")throw Error("Notifikationer blev ikke tilladt.");
  const reg=await navigator.serviceWorker.ready;
+ if(!reg.active)throw Error("Service worker er endnu ikke aktiv.");
  if(new URL(reg.scope).origin!==location.origin)throw Error("Service worker tilhører forkert domæne.");
  const {publicKey}=await call("/api/vapid");
  const existing=await reg.pushManager.getSubscription();
