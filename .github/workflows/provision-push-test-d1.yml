@@ -1,0 +1,43 @@
+name: Provision isolated push D1 test database (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: provision-push-test-d1
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    if: github.ref_name == 'feature/webpush-isolated-2026-10-27'
+    runs-on: ubuntu-latest
+    environment: push-test
+    defaults:
+      run:
+        working-directory: push-test
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install Wrangler
+        run: npm install
+      - name: Create or locate isolated D1 database
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/provision-test-db.mjs
+      - name: Apply schema to isolated D1 only
+        run: npx wrangler d1 execute elpris-push-isolated-test-db --remote --file=./schema.sql --config wrangler.jsonc
+      - name: Commit test database binding to test branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add push-test/wrangler.jsonc
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Configure isolated push test D1 binding'
+          git push origin HEAD:feature/webpush-isolated-2026-10-27
