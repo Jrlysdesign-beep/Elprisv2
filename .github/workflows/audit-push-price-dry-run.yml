@@ -39,5 +39,7 @@ jobs:
         run: python3 scripts/test-sqlite-reservations.py
       - name: Test overlapping delivery reservations in temporary SQLite
         run: python3 scripts/test-overlap-reservations.py
+      - name: Verify actual Worker SQL against isolated migrations offline
+        run: python3 scripts/test-worker-sql-contract.py
       - name: Read-only price feed dry run
         run: npm run dry-run
