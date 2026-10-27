@@ -1,3 +1,4 @@
+import {parseRegistration,MAX_REGISTER_BYTES,RATE_LIMITS,bucketId} from "./api-security.js";
 import {fetchTestFeed} from "./test-price-feed.js";
 import {classifyPushOutcome} from "./delivery-status.js";
 import {validateFeed,dueAlarms} from "./price-engine.js";
@@ -7,6 +8,12 @@ const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{stat
 const cors=(req,env)=>({"access-control-allow-origin":env.ALLOWED_ORIGIN,"access-control-allow-methods":"GET,POST,DELETE,OPTIONS","access-control-allow-headers":"content-type,authorization","vary":"Origin"});
 const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const token=req=>req.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{32,})$/)?.[1];
+async function limitRequest(env,action,subject){
+ const now=Date.now(),bucket=await hash(bucketId(action,subject,now));
+ // Single atomic UPSERT: parallel requests cannot bypass the hourly quota.
+ const result=await env.DB.prepare("INSERT INTO api_rate_limits(bucket,hits,expires_at) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET hits=hits+1 RETURNING hits").bind(bucket,Math.floor(now/3600000+1)*3600000).first();
+ return result&&result.hits<=RATE_LIMITS[action];
+}
 async function api(req,env){
  const url=new URL(req.url),h=cors(req,env);
  if(req.method==="GET"&&url.pathname==="/push-test")return new Response(`<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#102030"><link rel="manifest" href="/push-manifest.webmanifest"><title>Elpris Push Test</title><style>body{font:17px system-ui;background:#102030;color:white;max-width:540px;margin:30px auto;padding:20px}button{display:block;width:100%;padding:16px;margin:15px 0;border:0;border-radius:12px;font-size:17px}dialog{border:0;border-radius:16px;padding:20px;width:min(90vw,500px);background:#f8fafc;color:#102030}dialog label{display:block;margin:12px 0}dialog input,dialog select{display:block;width:100%;font-size:17px;padding:10px;box-sizing:border-box}.alarm{border-top:1px solid #bbb;padding:8px}.delete{width:auto;padding:8px;font-size:14px}#status{white-space:pre-wrap}</style></head><body><h1>Elpris – Push test</h1><p>Separat test. Tilføj siden til hjemmeskærmen i Safari, åbn den derfra, og tillad notifikationer.</p><button id="enable">Aktivér notifikationer</button><button id="test">Send testbesked</button><button id="show-alarms">Prisalarmer ⚙</button><dialog id="alarm-dialog"><h2>Prisalarmer</h2><label>Prisområde <select id="area"><option value="DK2">DK2 – Østdanmark</option><option value="DK1">DK1 – Vestdanmark</option></select></label><label>Giv besked når prisen er under (kr/kWh) <input id="threshold" type="number" min="0" max="50" step="0.01" value="0.50"></label><label>Varsling <select id="notice">${Array.from({length:25},(_,i)=>`<option value="${i}" ${i===3?"selected":""}>${i} timer før</option>`).join("")}</select></label><button id="save-alarm">Gem alarm</button><h3>Gemte alarmer</h3><div id="alarms"></div><button id="close-alarms">Luk</button><p>Testtilstand: Automatisk afsendelse er ikke aktiveret.</p></dialog><p id="status">Klar til test</p><script type="module" src="/push-test-client.js"></script></body></html>`,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
@@ -32,15 +39,25 @@ async function api(req,env){
  if(req.method==="GET"&&url.pathname==="/api/vapid")return env.VAPID_PUBLIC_KEY?json({publicKey:env.VAPID_PUBLIC_KEY},200,h):json({error:"Push not configured"},503,h);
  if(req.method==="POST"&&url.pathname==="/api/register"){
   if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY)return json({error:"Push not configured"},503,h);
-  const body=await req.json();if(!body.subscription?.endpoint?.startsWith("https://")||!body.subscription?.keys?.p256dh||!body.subscription?.keys?.auth)return json({error:"Invalid subscription"},400,h);
+  const ip=req.headers.get("cf-connecting-ip");
+  if(!ip)return json({error:"Client identity unavailable"},503,h);
+  const length=Number(req.headers.get("content-length"));
+  if(Number.isFinite(length)&&length>MAX_REGISTER_BYTES)return json({error:"Payload too large"},413,h);
+  let raw;
+  try{raw=await req.text()}catch{return json({error:"Invalid body"},400,h)}
+  if(new TextEncoder().encode(raw).length>MAX_REGISTER_BYTES)return json({error:"Payload too large"},413,h);
+  let subscription;
+  try{subscription=parseRegistration(raw)}catch(e){return json({error:e.message},e.message==="Payload too large"?413:400,h)}
+  if(!await limitRequest(env,"register",ip))return json({error:"Registration rate limit exceeded"},429,{...h,"retry-after":"3600"});
   const t=crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-",""),id=crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO subscriptions(id,endpoint,subscription_json,token_hash,created_at) VALUES(?,?,?,?,?)").bind(id,body.subscription.endpoint,JSON.stringify(body.subscription),await hash(t),Date.now()).run();
+  await env.DB.prepare("INSERT INTO subscriptions(id,endpoint,subscription_json,token_hash,created_at) VALUES(?,?,?,?,?)").bind(id,subscription.endpoint,JSON.stringify(subscription),await hash(t),Date.now()).run();
   return json({token:t},201,h);
  }
  const t=token(req);if(!t)return json({error:"Authorization required"},401,h);
  const sub=await env.DB.prepare("SELECT id FROM subscriptions WHERE token_hash=?").bind(await hash(t)).first();
  if(!sub)return json({error:"Unknown subscription"},401,h);
  if(req.method==="POST"&&url.pathname==="/api/test-push"){
+  if(!await limitRequest(env,"testPush",sub.id))return json({error:"Test push rate limit exceeded"},429,{...h,"retry-after":"3600"});
   if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)return json({error:"Push not configured"},503,h);
   const record=await env.DB.prepare("SELECT subscription_json FROM subscriptions WHERE id=?").bind(sub.id).first();
   if(!record)return json({error:"Subscription missing"},404,h);
