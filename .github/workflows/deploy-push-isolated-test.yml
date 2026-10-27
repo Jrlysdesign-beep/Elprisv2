@@ -8,27 +8,40 @@ permissions:
 
 jobs:
   deploy-test:
+    if: github.ref_name == 'feature/webpush-isolated-2026-10-27'
     runs-on: ubuntu-latest
     environment: push-test
     defaults:
       run:
         working-directory: push-test
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate isolated Worker configuration
+      - name: Validate isolated configuration and required secrets
         shell: bash
         run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feature/webpush-isolated-2026-10-27"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$VAPID_PUBLIC_KEY"
+          test -n "$VAPID_PRIVATE_KEY"
+          test -n "$VAPID_SUBJECT"
           test -f wrangler.jsonc
-          grep -q '"name": "elpris-push-isolated-test"' wrangler.jsonc
-          if grep -q REPLACE_WITH_NEW_TEST_D1_ID wrangler.jsonc; then
-            echo "A separate D1 test database must be configured before deployment"
-            exit 1
-          fi
+          node -e 'const c=require("./wrangler.jsonc");if(c.name!=="elpris-push-isolated-test"||c.d1_databases?.length!==1||c.d1_databases[0].database_name!=="elpris-push-isolated-test-db"||!/^([a-f0-9-]{36})$/i.test(c.d1_databases[0].database_id))process.exit(1)'
       - name: Install dependencies
         run: npm install
+      - name: Configure Worker secrets (isolated Worker only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$VAPID_PUBLIC_KEY" | npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.jsonc
+          printf '%s' "$VAPID_PRIVATE_KEY" | npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.jsonc
+          printf '%s' "$VAPID_SUBJECT" | npx wrangler secret put VAPID_SUBJECT --config wrangler.jsonc
       - name: Deploy isolated Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: push-test
-          command: deploy --config wrangler.jsonc
+        run: npx wrangler deploy --config wrangler.jsonc
