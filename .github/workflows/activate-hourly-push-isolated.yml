@@ -1,0 +1,66 @@
+name: Activate hourly price alerts on isolated push Worker (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type ACTIVATE-ISOLATED-HOURLY-PUSH to activate hourly push on isolated Worker ONLY'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: elpris-isolated-push-deployment
+  cancel-in-progress: false
+
+jobs:
+  activate-isolated-hourly-push:
+    if: github.event.inputs.confirmation == 'ACTIVATE-ISOLATED-HOURLY-PUSH'
+    runs-on: ubuntu-latest
+    environment: push-test
+    defaults:
+      run:
+        working-directory: push-test
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out isolated test branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/webpush-isolated-2026-10-27
+      - name: Strict isolated target and hourly activation guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "feature/webpush-isolated-2026-10-27"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          const db=c.d1_databases;
+          if(c.name!=='elpris-push-isolated-test' ||
+             c.main!=='src/worker.js' ||
+             db?.length!==1 ||
+             db[0].binding!=='DB' ||
+             db[0].database_name!=='elpris-push-isolated-test-db' ||
+             db[0].database_id!=='2811e53d-ee9d-45d2-94dc-d8ffed33d447' ||
+             c.triggers?.crons?.length!==1 ||
+             c.triggers.crons[0]!=='0 * * * *' ||
+             c.vars?.ENABLE_AUTOMATIC_PRICE_PUSH!=='true') {
+            console.error('Isolated hourly activation target or settings mismatch');
+            process.exit(1);
+          }
+          console.log('Verified isolated Worker, D1 database and hourly UTC cron');
+          NODE
+      - name: Install dependencies
+        run: npm install
+      - name: Run price engine unit tests
+        run: npm test
+      - name: Verify Worker build without deployment
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc
+      - name: Deploy isolated hourly Worker only (preserve existing VAPID secrets)
+        run: npx wrangler deploy --config wrangler.jsonc
