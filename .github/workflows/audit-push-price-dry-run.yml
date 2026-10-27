@@ -44,5 +44,7 @@ jobs:
         run: python3 scripts/test-worker-sql-contract.py
       - name: Test atomic API rate limits and migration 003 in temporary SQLite
         run: python3 scripts/test-api-rate-limits.py
+      - name: Test encrypted backup, migrations and rollback offline
+        run: python3 scripts/test-offline-migration-rollback.py
       - name: Read-only price feed dry run
         run: npm run dry-run
