@@ -1,7 +1,7 @@
 import {parseRegistration,MAX_REGISTER_BYTES,RATE_LIMITS,bucketId} from "./api-security.js";
 import {fetchTestFeed} from "./test-price-feed.js";
 import {classifyPushOutcome} from "./delivery-status.js";
-import {validateFeed,dueAlarms} from "./price-engine.js";
+import {validateFeed,dueAlarms,HOURLY_WINDOW_MS} from "./price-engine.js";
 import testClient from "./test-client.js";
 import webpush from "web-push";
 const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json",...headers}});
@@ -88,7 +88,7 @@ async function scheduled(env){
  webpush.setVapidDetails(env.VAPID_SUBJECT,env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
  const alarms=await env.DB.prepare("SELECT a.*,s.subscription_json FROM alarms a JOIN subscriptions s ON a.subscription_id=s.id WHERE a.enabled=1 AND a.area=?").bind(area).all();
  const now=Date.now();
- const candidates=dueAlarms(alarms.results,hours,now);
+ const candidates=dueAlarms(alarms.results,hours,now,HOURLY_WINDOW_MS);
  for(const candidate of candidates){
   const alarm=alarms.results.find(a=>a.id===candidate.alarmId);
   const reserved=await env.DB.prepare("INSERT OR IGNORE INTO deliveries(alarm_id,start_time,end_time,status,attempted_at) SELECT ?,?,?,'reserved',? WHERE NOT EXISTS (SELECT 1 FROM deliveries WHERE alarm_id=? AND start_time<? AND COALESCE(end_time,strftime('%Y-%m-%dT%H:%M:%fZ',start_time,'+15 minutes'))>?)").bind(alarm.id,candidate.startTime,candidate.endTime,Date.now(),alarm.id,candidate.endTime,candidate.startTime).run();
