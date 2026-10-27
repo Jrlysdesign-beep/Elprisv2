@@ -1,6 +1,7 @@
+import {fetchTestFeed} from "../src/test-price-feed.js";
 import {validateFeed,dueAlarms,uniqueCandidates} from "../src/price-engine.js";
 
-const PRICE_URL="https://jrlysdesign-beep.github.io/Elprisv2/prices.json";
+const PRICE_URL="https://api.energidataservice.dk/dataset/Elspotprices";
 const now=Date.now();
 const alarms=[{id:"dry-run-DK2",enabled:1,threshold:0.5,notice_hours:3}];
 const summary={mode:"dry-run",sent:0,dbWrites:0,liveAppChanges:0,feedUrl:PRICE_URL,checkedAt:new Date(now).toISOString(),tests:{}};
@@ -22,21 +23,12 @@ check("alarmAndDuplicate",()=>{
  if(due.length!==1||uniqueCandidates(due,new Set(["dry-run-DK2|"+due[0].startTime])).length!==0)throw Error("Alarm/dedup failure");
  return {status:"passed",candidates:due.length,afterDuplicateFilter:0};
 });
-try{
- const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),10000);
- let response;
- try{response=await fetch(PRICE_URL,{headers:{accept:"application/json"},signal:controller.signal});}
- finally{clearTimeout(timeout);}
- summary.feedHttpStatus=response.status;
- if(!response.ok)throw Error("HTTP "+response.status);
- const data=await response.json();
- summary.feedShape={topLevelKeys:Object.keys(data).slice(0,12),area:data?.area??null,hoursCount:Array.isArray(data?.hours)?data.hours.length:null};
- for(const area of ["DK1","DK2"]){
-  try{
-   const hours=validateFeed(data,area);
-   summary.tests["liveFeed"+area]={status:"valid",hours:hours.length,candidates:dueAlarms(alarms.map(a=>({...a,id:"dry-run-"+area})),hours,now).length};
-  }catch(e){summary.tests["liveFeed"+area]={status:"blocked",reason:e.message};}
- }
-}catch(e){summary.feedError=e.message;}
+for(const area of ["DK1","DK2"]){
+ try{
+  const feed=await fetchTestFeed(area,now);
+  const hours=validateFeed(feed,area);
+  summary.tests["liveFeed"+area]={status:"valid",hours:hours.length,priceType:feed.priceType,firstHour:feed.hours[0]?.time,lastHour:feed.hours.at(-1)?.time,candidates:dueAlarms(alarms.map(a=>({...a,id:"dry-run-"+area})),hours,now).length};
+ }catch(e){summary.tests["liveFeed"+area]={status:"blocked",reason:e.message};}
+}
 console.log(JSON.stringify(summary,null,2));
-if(Object.values(summary.tests).some(x=>x.status==="rejected")||summary.tests.alarmAndDuplicate?.status!=="passed")process.exitCode=1;
+if(Object.values(summary.tests).some(x=>x.status==="rejected"||x.status==="blocked")||summary.tests.alarmAndDuplicate?.status!=="passed")process.exitCode=1;
