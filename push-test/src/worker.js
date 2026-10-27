@@ -1,3 +1,4 @@
+import {fetchTestFeed} from "./test-price-feed.js";
 import {validateFeed,dueAlarms} from "./price-engine.js";
 import testClient from "./test-client.js";
 import webpush from "web-push";
@@ -19,6 +20,14 @@ async function api(req,env){
  if(req.method==="GET" ? (origin!==null&&!sameOrigin&&!allowedExternal) : (!sameOrigin&&!allowedExternal))
   return json({error:"Origin not allowed"},403,h);
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:h});
+ if(req.method==="GET"&&url.pathname==="/api/test-price-feed"){
+  const area=url.searchParams.get("area");
+  if(!["DK1","DK2"].includes(area))return json({error:"Choose DK1 or DK2"},400,h);
+  try{
+   const feed=await fetchTestFeed(area);
+   return json(feed,200,{...h,"cache-control":"no-store"});
+  }catch(e){console.error("Test feed unavailable",e.message);return json({error:"Test price feed unavailable"},503,h);}
+ }
  if(req.method==="GET"&&url.pathname==="/api/vapid")return env.VAPID_PUBLIC_KEY?json({publicKey:env.VAPID_PUBLIC_KEY},200,h):json({error:"Push not configured"},503,h);
  if(req.method==="POST"&&url.pathname==="/api/register"){
   if(!env.VAPID_PRIVATE_KEY||!env.VAPID_PUBLIC_KEY)return json({error:"Push not configured"},503,h);
@@ -47,11 +56,11 @@ async function api(req,env){
  return json({error:"Not found"},404,h);
 }
 async function scheduled(env){
+ if(env.ENABLE_AUTOMATIC_PRICE_PUSH!=="true")return;
  if(!env.VAPID_SUBJECT||!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY)throw Error("Push keys not configured");
- const response=await fetch(env.PRICE_URL,{headers:{"accept":"application/json"}});if(!response.ok)throw Error("Price feed unavailable");
- const data=await response.json();
- // Fail closed: live price feed currently lacks explicit offsets. No cron is configured.
- const area=data.area;
+ // Each area uses the separate, timezone-aware test feed.
+ for(const area of ["DK1","DK2"]){
+ const data=await fetchTestFeed(area);
  const hours=validateFeed(data,area);
  webpush.setVapidDetails(env.VAPID_SUBJECT,env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
  const alarms=await env.DB.prepare("SELECT a.*,s.subscription_json FROM alarms a JOIN subscriptions s ON a.subscription_id=s.id WHERE a.enabled=1 AND a.area=?").bind(area).all();
@@ -67,6 +76,7 @@ async function scheduled(env){
    // Keep delivery reservation on uncertain network errors to avoid duplicate notifications.
    console.error("Push delivery failed",e.statusCode||"unknown");
   }
+ }
  }
 }
 export default {fetch:api,scheduled:(_event,env,ctx)=>ctx.waitUntil(scheduled(env))};
