@@ -27,5 +27,7 @@ jobs:
         run: npm test
       - name: Real SQLite concurrent reservation test (temporary database only)
         run: python3 scripts/test-sqlite-reservations.py
+      - name: Test overlapping delivery reservations in temporary SQLite
+        run: python3 scripts/test-overlap-reservations.py
       - name: Read-only price feed dry run
         run: npm run dry-run
