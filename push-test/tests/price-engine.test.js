@@ -26,3 +26,59 @@ test("fires at lead time only, strictly below threshold, without duplicates",()=
  assert.equal(dueAlarms(a,h,now+60000).length,0);
  assert.equal(dueAlarms([{...a[0],threshold:0.49}],h,now).length,0);
 });
+
+const alarm=(overrides={})=>({id:"quarter-alarm",enabled:1,threshold:0.5,notice_hours:3,...overrides});
+const quarter=(time,price)=>({time,price});
+test("four quarter-hour intervals produce distinct candidates, never the same delivery twice",()=>{
+ const hours=validateFeed(feed([
+  quarter("2026-10-27T15:00:00+01:00",0.40),
+  quarter("2026-10-27T15:15:00+01:00",0.41),
+  quarter("2026-10-27T15:30:00+01:00",0.42),
+  quarter("2026-10-27T15:45:00+01:00",0.43)
+ ]),"DK2");
+ const delivered=new Set();
+ for(let i=0;i<4;i++){
+  const now=Date.parse("2026-10-27T11:00:30Z")+i*900000;
+  const candidates=dueAlarms([alarm()],hours,now);
+  assert.equal(candidates.length,1);
+  assert.equal(uniqueCandidates(candidates,delivered).length,1);
+  delivered.add(candidates[0].alarmId+"|"+candidates[0].startTime);
+  assert.equal(uniqueCandidates(candidates,delivered).length,0);
+ }
+ assert.equal(delivered.size,4);
+});
+test("exact due window boundaries and late execution fail closed",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-27T15:15:00+01:00",0.4)]),"DK2");
+ const due=Date.parse("2026-10-27T11:15:00Z");
+ assert.equal(dueAlarms([alarm()],hours,due-1).length,0);
+ assert.equal(dueAlarms([alarm()],hours,due).length,1);
+ assert.equal(dueAlarms([alarm()],hours,due+59999).length,1);
+ assert.equal(dueAlarms([alarm()],hours,due+60000).length,0);
+ assert.equal(dueAlarms([alarm()],hours,due+900000).length,0);
+});
+test("disabled alarms, invalid lead time, and threshold equality do not trigger",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-27T15:00:00+01:00",0.5)]),"DK2");
+ const now=Date.parse("2026-10-27T11:00:00Z");
+ assert.equal(dueAlarms([alarm({threshold:0.5})],hours,now).length,0);
+ assert.equal(dueAlarms([alarm({enabled:0,threshold:0.6})],hours,now).length,0);
+ assert.equal(dueAlarms([alarm({notice_hours:25,threshold:0.6})],hours,now).length,0);
+ assert.equal(dueAlarms([alarm({notice_hours:1.5,threshold:0.6})],hours,now).length,0);
+});
+test("DK1 and DK2 data cannot be confused",()=>{
+ assert.throws(()=>validateFeed({area:"DK1",hours:[quarter("2026-10-27T15:00:00+01:00",0.4)]},"DK2"),/Invalid area/);
+});
+test("duplicate quarter timestamps are rejected, even when presented in different offsets",()=>{
+ assert.throws(()=>validateFeed(feed([quarter("2026-10-27T15:00:00+01:00",0.4),quarter("2026-10-27T14:00:00Z",0.4)]),"DK2"),/duplicate timestamp/);
+});
+test("fall DST quarters in repeated 02:00 hour remain independent",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-25T02:15:00+02:00",0.4),quarter("2026-10-25T02:15:00+01:00",0.4)]),"DK2");
+ assert.equal(hours.length,2);assert.equal(hours[1].startMs-hours[0].startMs,3600000);
+});
+test("one alarm and one interval share a stable deduplication key across reruns",()=>{
+ const hours=validateFeed(feed([quarter("2026-10-27T15:00:00+01:00",0.4)]),"DK2");
+ const now=Date.parse("2026-10-27T11:00:30Z");
+ const first=dueAlarms([alarm()],hours,now);
+ const keys=new Set(first.map(x=>x.alarmId+"|"+x.startTime));
+ assert.equal(uniqueCandidates(dueAlarms([alarm()],hours,now),keys).length,0);
+ assert.equal(uniqueCandidates(dueAlarms([alarm({id:"other-alarm"})],hours,now),keys).length,1);
+});
