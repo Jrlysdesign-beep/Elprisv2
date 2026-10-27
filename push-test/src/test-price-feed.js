@@ -24,7 +24,7 @@ export function normalizeSpotRecords(records,area,nowMs=Date.now()){
   if(row.PriceArea!==area)continue;
   const utc=parseUtc(row.HourUTC);
   if(utc<nowMs-3600000||utc>nowMs+48*3600000)continue;
-  const dkk=Number(row.SpotPriceDKK);
+  const dkk=row.SpotPriceDKK;
   if(row.SpotPriceDKK===null||row.SpotPriceDKK===undefined||!Number.isFinite(dkk))throw Error("Invalid spot price");
   hours.push({time:localWithOffset(utc),price:dkk/1000});
  }
